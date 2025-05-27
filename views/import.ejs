@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import Leads - Leads Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            border: none;
+        }
+        .card-header {
+            background-color: #343a40;
+            color: white;
+            border-radius: 8px 8px 0 0 !important;
+        }
+        .required-field::after {
+            content: "*";
+            color: red;
+            margin-left: 4px;
+        }
+        .custom-file-input::-webkit-file-upload-button {
+            visibility: hidden;
+        }
+        .custom-file-input::before {
+            content: 'Select file';
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            border-radius: 4px;
+            padding: 8px 12px;
+            outline: none;
+            white-space: nowrap;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .custom-file-input:hover::before {
+            background: #0069d9;
+        }
+        .template-link {
+            color: #007bff;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .field-list {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .field-list h5 {
+            color: #343a40;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 class="mb-0"><i class="fas fa-file-import me-2"></i> Import Leads</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="importForm" enctype="multipart/form-data">
+                            <% if (campaignId) { %>
+                                <input type="hidden" name="campaignId" value="<%= campaignId %>">
+                                <div class="alert alert-info mb-4">
+                                    <i class="fas fa-info-circle me-2"></i> These leads will be associated with campaign ID: <%= campaignId %>
+                                </div>
+                            <% } %>
+                            
+                            <div class="mb-4">
+                                <label for="branchSelect" class="form-label required-field">Select Branch</label>
+                                <select class="form-select" id="branchSelect" name="branchId" required>
+                                    <option value="">-- Select Branch --</option>
+                                    <% branches.forEach(branch => { %>
+                                        <option value="<%= branch.id %>"><%= branch.name %></option>
+                                    <% }) %>
+                                </select>
+                                <div class="form-text text-muted">
+                                    All leads in this file will be assigned to the selected branch
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="fileInput" class="form-label required-field">Excel File</label>
+                                <input type="file" class="form-control" id="fileInput" name="file" accept=".xlsx,.xls" required>
+                                <div class="form-text text-muted">
+                                    Only Excel files (.xlsx, .xls) are allowed
+                                </div>
+                            </div>
+                            
+                            <div class="field-list">
+                                <h5><i class="fas fa-list-check me-2"></i>Required Columns Format</h5>
+                                <p>Your Excel file should have the following columns:</p>
+                                <ul class="mb-0">
+                                    <li><strong>Opportunity Title</strong> - Title of the lead opportunity</li>
+                                    <li><strong>Created Date</strong> - Date when the lead was created (MM/DD/YYYY)</li>
+                                    <li><strong>Lead Status</strong> - Current status of the lead</li>
+                                    <li><strong>Last Contacted</strong> - Date of last contact (MM/DD/YYYY)</li>
+                                    <li><strong>Salesperson</strong> - Name of the salesperson</li>
+                                    <li><strong>Source</strong> - Lead source</li>
+                                    <li><strong>Proposal Status</strong> - Status of the proposal</li>
+                                    <li><strong>City (Contact)</strong> - City of the contact</li>
+                                    <li><strong>State (Contact)</strong> - State of the contact</li>
+                                    <li><strong>Street Address (Contact)</strong> - Street address</li>
+                                    <li><strong>Zip (Contact)</strong> - ZIP code</li>
+                                    <li><strong>Email Address</strong> - Email address of the contact</li>
+                                    <li><strong>First Name</strong> - First name of the contact</li>
+                                    <li><strong>Last Name</strong> - Last name of the contact</li>
+                                    <li><strong>Phone</strong> - Phone number</li>
+                                    <li><strong>Tags</strong> - Tags separated by commas</li>
+                                    <li><strong>Condition</strong> - Lead condition</li>
+                                    <li><strong>Final Proposal Amount</strong> - Final proposal amount</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="d-grid gap-2 mt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-upload me-2"></i> Upload and Import
+                                </button>
+                                <a href="/dashboard" class="btn btn-outline-secondary">
+                                    <i class="fas fa-arrow-left me-2"></i> Back to Dashboard
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="card d-none" id="resultsCard">
+                    <div class="card-header">
+                        <h4 class="mb-0"><i class="fas fa-check-circle me-2"></i> Import Results</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="resultsContent"></div>
+                        <div class="d-grid gap-2 mt-3">
+                            <a href="/dashboard" class="btn btn-primary">
+                                <i class="fas fa-home me-2"></i> Return to Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const importForm = document.getElementById('importForm');
+            const resultsCard = document.getElementById('resultsCard');
+            const resultsContent = document.getElementById('resultsContent');
+            
+            importForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(importForm);
+                const submitBtn = importForm.querySelector('button[type="submit"]');
+                
+                // Disable submit button and show loading state
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Importing...';
+                
+                fetch('/import/leads', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Show results
+                    importForm.parentElement.parentElement.classList.add('d-none');
+                    resultsCard.classList.remove('d-none');
+                    
+                    if (data.error) {
+                        resultsContent.innerHTML = `
+                            <div class="alert alert-danger">
+                                <h5><i class="fas fa-exclamation-triangle me-2"></i> Import Failed</h5>
+                                <p>${data.message || data.error}</p>
+                            </div>
+                        `;
+                    } else {
+                        const errorsList = data.results.errors.length > 0 
+                            ? `<div class="mt-3">
+                                <h6 class="text-danger"><i class="fas fa-exclamation-circle me-2"></i> Errors (${data.results.errors.length}):</h6>
+                                <ul class="list-group mb-0">
+                                    ${data.results.errors.map((error, index) => 
+                                        `<li class="list-group-item list-group-item-danger">
+                                            Row ${index + 1}: ${error.error}
+                                        </li>`
+                                    ).join('')}
+                                </ul>
+                               </div>` 
+                            : '';
+                            
+                        resultsContent.innerHTML = `
+                            <div class="text-center mb-4">
+                                <i class="fas fa-check-circle text-success" style="font-size: 3rem;"></i>
+                                <h4 class="mt-3">Import Completed</h4>
+                            </div>
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">Summary</h6>
+                                    <ul class="list-group list-group-flush mb-0">
+                                        <li class="list-group-item bg-transparent d-flex justify-content-between">
+                                            <span>Total Rows</span>
+                                            <span class="fw-bold">${data.results.total}</span>
+                                        </li>
+                                        <li class="list-group-item bg-transparent d-flex justify-content-between">
+                                            <span>Successfully Imported</span>
+                                            <span class="fw-bold text-success">${data.results.success}</span>
+                                        </li>
+                                        <li class="list-group-item bg-transparent d-flex justify-content-between">
+                                            <span>Errors</span>
+                                            <span class="fw-bold text-danger">${data.results.errors.length}</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            ${errorsList}
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    importForm.parentElement.parentElement.classList.add('d-none');
+                    resultsCard.classList.remove('d-none');
+                    resultsContent.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h5><i class="fas fa-exclamation-triangle me-2"></i> Import Failed</h5>
+                            <p>An unexpected error occurred. Please try again later.</p>
+                        </div>
+                    `;
+                })
+                .finally(() => {
+                    // Reset button state
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-upload me-2"></i> Upload and Import';
+                });
+            });
+        });
+    </script>
+</body>
+</html> 

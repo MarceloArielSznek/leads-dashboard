@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Leads</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="app" class="max-w-2xl mx-auto py-10">
+        <div class="bg-white rounded-lg shadow-md p-8">
+            <h1 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                <i class="fas fa-file-excel text-green-500 mr-3"></i> Export Leads
+            </h1>
+            <form @submit.prevent="downloadExcel">
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Select fields to export:</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div v-for="field in availableFields" :key="field.value">
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" v-model="selectedFields" :value="field.value" class="form-checkbox text-indigo-600">
+                                <span class="ml-2 text-gray-700">{{ field.label }}</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Filter by tag(s):</label>
+                    <select v-model="filterTags" multiple class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <option v-for="tag in tags" :key="tag" :value="tag">{{ tag }}</option>
+                    </select>
+                    <div class="text-xs text-gray-500 mt-1">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</div>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Filter by status(es):</label>
+                    <select v-model="filterStatuses" multiple class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
+                    </select>
+                    <div class="text-xs text-gray-500 mt-1">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</div>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Filter by created date:</label>
+                    <div class="flex space-x-2">
+                        <input type="date" v-model="dateFrom" class="w-1/2 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <input type="date" v-model="dateTo" class="w-1/2 px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors flex items-center">
+                        <i class="fas fa-download mr-2"></i> Download Excel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        const { createApp } = Vue;
+        createApp({
+            data() {
+                return {
+                    availableFields: [
+                        { value: 'opportunity_title', label: 'Opportunity Title' },
+                        { value: 'created_date', label: 'Created Date' },
+                        { value: 'client_contact', label: 'Client Contact' },
+                        { value: 'lead_status', label: 'Lead Status' },
+                        { value: 'age', label: 'Age' },
+                        { value: 'last_contacted', label: 'Last Contacted' },
+                        { value: 'salesperson', label: 'Salesperson' },
+                        { value: 'source', label: 'Source' },
+                        { value: 'proposal_status', label: 'Proposal Status' },
+                        { value: 'city_contact', label: 'City (Contact)' },
+                        { value: 'state_contact', label: 'State (Contact)' },
+                        { value: 'street_address_contact', label: 'Street Address (Contact)' },
+                        { value: 'zip_contact', label: 'Zip (Contact)' },
+                        { value: 'email_address', label: 'Email Address' },
+                        { value: 'first_name', label: 'First Name' },
+                        { value: 'last_name', label: 'Last Name' },
+                        { value: 'cell_phone', label: 'Cell Phone' },
+                        { value: 'notes', label: 'Notes' },
+                        { value: 'phone', label: 'Phone' },
+                        { value: 'tags', label: 'Tags' },
+                        { value: 'condition', label: 'Condition' },
+                        { value: 'final_proposal_amount', label: 'Final Proposal Amount' },
+                        { value: 'recuperado', label: 'Recovered' }
+                    ],
+                    selectedFields: ['opportunity_title', 'first_name', 'last_name'],
+                    tags: [],
+                    statuses: [],
+                    filterTags: [],
+                    filterStatuses: [],
+                    dateFrom: '',
+                    dateTo: ''
+                }
+            },
+            methods: {
+                async fetchAdmin() {
+                    const res = await axios.get('/admin');
+                    this.tags = res.data.tags;
+                    this.statuses = res.data.statuses;
+                },
+                async downloadExcel() {
+                    const params = new URLSearchParams();
+                    this.selectedFields.forEach(f => params.append('fields', f));
+                    this.filterTags.forEach(tag => params.append('tags', tag));
+                    this.filterStatuses.forEach(status => params.append('statuses', status));
+                    if (this.dateFrom) params.append('dateFrom', this.dateFrom);
+                    if (this.dateTo) params.append('dateTo', this.dateTo);
+                    const url = window.location.pathname + '/download?' + params.toString();
+                    window.location.href = url;
+                }
+            },
+            mounted() {
+                this.fetchAdmin();
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html> 

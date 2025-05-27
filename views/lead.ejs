@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Details</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="app" class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-4">
+                        <a href="/" class="text-gray-600 hover:text-gray-800">
+                            <i class="fas fa-arrow-left"></i>
+                        </a>
+                        <h1 class="text-2xl font-semibold text-gray-800">Lead Details</h1>
+                    </div>
+                    <div class="flex space-x-4">
+                        <button @click="showEditModal = true" 
+                                class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors">
+                            <i class="fas fa-edit mr-2"></i>
+                            Edit Lead
+                        </button>
+                        <button @click="confirmDelete" 
+                                class="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors">
+                            <i class="fas fa-trash mr-2"></i>
+                            Delete Lead
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div v-if="lead" class="bg-white rounded-lg shadow-sm">
+                <!-- Lead Header -->
+                <div class="p-6 border-b border-gray-100">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h2 class="text-2xl font-semibold text-gray-800">{{ lead.title }}</h2>
+                            <p class="text-gray-500 mt-1">{{ lead.first_name }} {{ lead.last_name }}</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <span :class="{
+                                'px-3 py-1 text-sm font-medium rounded-full': true,
+                                'bg-green-100 text-green-800': lead.status === 'contacted',
+                                'bg-yellow-100 text-yellow-800': lead.status === 'in_progress',
+                                'bg-red-100 text-red-800': lead.status === 'lost',
+                                'bg-gray-100 text-gray-800': lead.status === 'new'
+                            }">
+                                {{ lead.status }}
+                            </span>
+                            <span v-if="lead.condition" 
+                                  class="px-3 py-1 text-sm font-medium rounded-full bg-purple-100 text-purple-800">
+                                {{ lead.condition }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lead Details -->
+                <div class="p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Contact Information -->
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">Contact Information</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-500">Email</label>
+                                    <p class="mt-1 text-gray-800">{{ lead.email }}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-500">Phone</label>
+                                    <p class="mt-1 text-gray-800">{{ lead.phone }}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-500">Address</label>
+                                    <p class="mt-1 text-gray-800">
+                                        {{ lead.street }}<br>
+                                        {{ lead.city }}, {{ lead.state }} {{ lead.zip_code }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sales Information -->
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">Sales Information</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-500">Salesperson</label>
+                                    <p class="mt-1 text-gray-800">{{ lead.salesperson }}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-500">Source</label>
+                                    <p class="mt-1 text-gray-800">{{ lead.source }}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-500">Proposal Status</label>
+                                    <p class="mt-1">
+                                        <span :class="{
+                                            'px-2 py-1 text-sm font-medium rounded-full': true,
+                                            'bg-blue-100 text-blue-800': lead.proposal_status === 'pending',
+                                            'bg-green-100 text-green-800': lead.proposal_status === 'accepted',
+                                            'bg-red-100 text-red-800': lead.proposal_status === 'rejected',
+                                            'bg-yellow-100 text-yellow-800': lead.proposal_status === 'sent'
+                                        }">
+                                            {{ lead.proposal_status }}
+                                        </span>
+                                        <span v-if="lead.proposal_amount" class="ml-2 text-gray-800">
+                                            ${{ lead.proposal_amount.toLocaleString() }}
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dates and Timeline -->
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">Timeline</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-500">Created Date</label>
+                                    <p class="mt-1 text-gray-800">{{ formatDate(lead.created_date) }}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-medium text-gray-500">Age</label>
+                                    <p class="mt-1 text-gray-800">{{ lead.age }} days</p>
+                                </div>
+                                <div v-if="lead.last_contacted">
+                                    <label class="text-sm font-medium text-gray-500">Last Contacted</label>
+                                    <p class="mt-1 text-gray-800">{{ formatDate(lead.last_contacted) }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes and Tags -->
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-800 mb-4">Additional Information</h3>
+                            <div class="space-y-4">
+                                <div v-if="lead.note">
+                                    <label class="text-sm font-medium text-gray-500">Notes</label>
+                                    <p class="mt-1 text-gray-800">{{ lead.note }}</p>
+                                </div>
+                                <div v-if="lead.tags">
+                                    <label class="text-sm font-medium text-gray-500">Tags</label>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        <span v-for="tag in lead.tags.split(',')" 
+                                              :key="tag"
+                                              class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                                            {{ tag }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Files Section -->
+                        <div class="md:col-span-2">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-medium text-gray-800">Files</h3>
+                                <button @click="showUploadFileModal = true"
+                                        class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors">
+                                    <i class="fas fa-upload mr-2"></i>
+                                    Upload File
+                                </button>
+                            </div>
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <div v-if="files.length === 0" class="text-center text-gray-500 py-8">
+                                    <i class="fas fa-file-alt text-4xl mb-2"></i>
+                                    <p>No files uploaded yet</p>
+                                </div>
+                                <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div v-for="file in files" 
+                                         :key="file.id"
+                                         class="bg-white p-4 rounded-lg shadow-sm">
+                                        <div class="flex items-start justify-between">
+                                            <div class="flex items-center">
+                                                <i class="fas fa-file text-indigo-500 text-xl mr-3"></i>
+                                                <div>
+                                                    <p class="text-sm font-medium text-gray-800">{{ file.name }}</p>
+                                                    <p class="text-xs text-gray-500">{{ formatFileSize(file.size) }}</p>
+                                                </div>
+                                            </div>
+                                            <div class="flex space-x-2">
+                                                <button @click="downloadFile(file)"
+                                                        class="text-indigo-600 hover:text-indigo-800"
+                                                        title="Download">
+                                                    <i class="fas fa-download"></i>
+                                                </button>
+                                                <button @click="deleteFile(file)"
+                                                        class="text-red-600 hover:text-red-800"
+                                                        title="Delete">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Edit Lead Modal -->
+        <div v-if="showEditModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-lg w-[600px] max-h-[90vh] overflow-y-auto">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">Edit Lead</h3>
+                <form @submit.prevent="updateLead">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                            <input v-model="editForm.title" 
+                                   type="text" 
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+                            <input v-model="editForm.first_name" 
+                                   type="text" 
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+                            <input v-model="editForm.last_name" 
+                                   type="text" 
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                            <input v-model="editForm.email" 
+                                   type="email" 
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                            <input v-model="editForm.phone" 
+                                   type="tel" 
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                            <select v-model="editForm.status" 
+                                    class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                <option value="new">New</option>
+                                <option value="contacted">Contacted</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="lost">Lost</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Proposal Status</label>
+                            <select v-model="editForm.proposal_status" 
+                                    class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                <option value="pending">Pending</option>
+                                <option value="sent">Sent</option>
+                                <option value="accepted">Accepted</option>
+                                <option value="rejected">Rejected</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Proposal Amount</label>
+                            <input v-model="editForm.proposal_amount" 
+                                   type="number" 
+                                   step="0.01"
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Salesperson</label>
+                            <input v-model="editForm.salesperson" 
+                                   type="text" 
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                            <textarea v-model="editForm.note" 
+                                      class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"></textarea>
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                            <input v-model="editForm.tags" 
+                                   type="text" 
+                                   placeholder="Comma-separated tags"
+                                   class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2 mt-6">
+                        <button type="button" 
+                                @click="showEditModal = false" 
+                                class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors">
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Upload File Modal -->
+        <div v-if="showUploadFileModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-lg w-96">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">Upload File</h3>
+                <form @submit.prevent="uploadFile">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">File</label>
+                        <input type="file" 
+                               @change="handleFileSelect" 
+                               class="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    </div>
+                    <div class="flex justify-end space-x-2">
+                        <button type="button" 
+                                @click="showUploadFileModal = false" 
+                                class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors">
+                            Upload
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue
+
+        createApp({
+            data() {
+                return {
+                    lead: null,
+                    files: [],
+                    showEditModal: false,
+                    showUploadFileModal: false,
+                    selectedFile: null,
+                    editForm: {
+                        title: '',
+                        first_name: '',
+                        last_name: '',
+                        email: '',
+                        phone: '',
+                        status: '',
+                        proposal_status: '',
+                        proposal_amount: '',
+                        salesperson: '',
+                        note: '',
+                        tags: ''
+                    }
+                }
+            },
+            methods: {
+                formatDate(date) {
+                    if (!date) return '';
+                    return new Date(date).toLocaleDateString();
+                },
+                formatFileSize(bytes) {
+                    if (bytes === 0) return '0 Bytes';
+                    const k = 1024;
+                    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                },
+                async loadLead() {
+                    try {
+                        const leadId = window.location.pathname.split('/').pop();
+                        const response = await axios.get(`/campaign/lead/${leadId}`);
+                        this.lead = response.data;
+                        this.editForm = { ...this.lead };
+                        await this.loadFiles();
+                    } catch (error) {
+                        console.error('Error loading lead:', error);
+                    }
+                },
+                async loadFiles() {
+                    try {
+                        const leadId = window.location.pathname.split('/').pop();
+                        const response = await axios.get(`/campaign/lead/${leadId}/files`);
+                        this.files = response.data;
+                    } catch (error) {
+                        console.error('Error loading files:', error);
+                    }
+                },
+                async updateLead() {
+                    try {
+                        const leadId = window.location.pathname.split('/').pop();
+                        const response = await axios.put(`/campaign/lead/${leadId}`, this.editForm);
+                        this.lead = response.data;
+                        this.showEditModal = false;
+                    } catch (error) {
+                        console.error('Error updating lead:', error);
+                    }
+                },
+                async confirmDelete() {
+                    if (confirm('Are you sure you want to delete this lead?')) {
+                        try {
+                            const leadId = window.location.pathname.split('/').pop();
+                            await axios.delete(`/campaign/lead/${leadId}`);
+                            window.location.href = '/';
+                        } catch (error) {
+                            console.error('Error deleting lead:', error);
+                        }
+                    }
+                },
+                handleFileSelect(event) {
+                    this.selectedFile = event.target.files[0];
+                },
+                async uploadFile() {
+                    if (!this.selectedFile) return;
+
+                    const formData = new FormData();
+                    formData.append('file', this.selectedFile);
+
+                    try {
+                        const leadId = window.location.pathname.split('/').pop();
+                        await axios.post(`/campaign/lead/${leadId}/files`, formData, {
+                            headers: {
+                                'Content-Type': 'multipart/form-data'
+                            }
+                        });
+                        this.showUploadFileModal = false;
+                        this.selectedFile = null;
+                        await this.loadFiles();
+                    } catch (error) {
+                        console.error('Error uploading file:', error);
+                    }
+                },
+                async deleteFile(file) {
+                    if (confirm('Are you sure you want to delete this file?')) {
+                        try {
+                            const leadId = window.location.pathname.split('/').pop();
+                            await axios.delete(`/campaign/lead/${leadId}/files/${file.id}`);
+                            await this.loadFiles();
+                        } catch (error) {
+                            console.error('Error deleting file:', error);
+                        }
+                    }
+                },
+                downloadFile(file) {
+                    const leadId = window.location.pathname.split('/').pop();
+                    window.location.href = `/campaign/lead/${leadId}/files/${file.id}/download`;
+                }
+            },
+            mounted() {
+                this.loadLead();
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html> 

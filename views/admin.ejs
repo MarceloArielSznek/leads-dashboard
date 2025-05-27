@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        .notification-enter-active,
+        .notification-leave-active {
+            transition: all 0.3s ease;
+        }
+        .notification-enter-from,
+        .notification-leave-to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="admin-app" class="max-w-4xl mx-auto py-10">
+        <!-- Notifications -->
+        <div class="fixed top-4 right-4 z-50">
+            <transition-group name="notification">
+                <div v-for="notification in notifications" 
+                     :key="notification.id"
+                     :class="[
+                         'mb-2 p-4 rounded-lg shadow-lg max-w-md',
+                         notification.type === 'success' ? 'bg-green-500' : 'bg-red-500',
+                         'text-white'
+                     ]">
+                    <div class="flex items-center justify-between">
+                        <span>{{ notification.message }}</span>
+                        <button @click="removeNotification(notification.id)" class="ml-4 text-white hover:text-gray-200">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </transition-group>
+        </div>
+
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Admin Panel</h1>
+            <a href="/dashboard" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-indigo-500 hover:text-white transition-colors">Back to Dashboard</a>
+        </div>
+        <div class="mb-6 border-b border-gray-200">
+            <nav class="flex space-x-4">
+                <button v-for="tab in tabs" :key="tab.key" @click="activeTab = tab.key"
+                    :class="['px-4 py-2 font-medium', activeTab === tab.key ? 'border-b-2 border-indigo-500 text-indigo-600' : 'text-gray-500 hover:text-indigo-500']">
+                    {{ tab.label }}
+                </button>
+            </nav>
+        </div>
+        <div v-if="activeTab === 'campaigns'">
+            <h2 class="text-xl font-semibold mb-4 flex items-center justify-between">
+                Campaigns
+                <button @click="showNewCampaignModal = true" class="bg-indigo-500 text-white px-4 py-2 rounded flex items-center gap-2">
+                    <i class="fas fa-plus"></i> New Campaign
+                </button>
+            </h2>
+            <!-- Modal de creación de campaña -->
+            <div v-if="showNewCampaignModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-lg relative">
+                    <button @click="closeNewCampaignModal" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl"><i class="fas fa-times"></i></button>
+                    <h3 class="text-lg font-semibold mb-4">Create Campaign</h3>
+                    <form @submit.prevent="createCampaign" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="col-span-2">
+                            <input v-model="newCampaign.name" type="text" placeholder="Campaign name" class="w-full px-3 py-2 border rounded">
+                        </div>
+                        <div class="col-span-2">
+                            <textarea v-model="newCampaign.description" placeholder="Campaign description" class="w-full px-3 py-2 border rounded"></textarea>
+                        </div>
+                        <div>
+                            <select v-model="newCampaign.type" class="w-full px-3 py-2 border rounded">
+                                <option value="">Select campaign type</option>
+                                <option v-for="type in campaignTypes" :key="type.id" :value="type.id">{{ type.name }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select v-model="newCampaign.branch_ids" multiple class="w-full px-3 py-2 border rounded h-24">
+                                <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
+                            </select>
+                            <small class="text-gray-500">Hold Ctrl (Windows) or Cmd (Mac) to select multiple branches</small>
+                        </div>
+                        <div class="col-span-2 flex gap-2">
+                            <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded w-full">Create</button>
+                            <button type="button" @click="closeNewCampaignModal" class="bg-gray-300 text-gray-700 px-4 py-2 rounded w-full">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <!-- Fin modal -->
+            <form v-if="!editingCampaign" v-show="false" @submit.prevent="createCampaign" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></form>
+            <form v-else @submit.prevent="updateCampaign" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="col-span-2">
+                    <input v-model="editingCampaign.name" type="text" placeholder="Campaign name" class="w-full px-3 py-2 border rounded">
+                </div>
+                <div class="col-span-2">
+                    <textarea v-model="editingCampaign.description" placeholder="Campaign description" class="w-full px-3 py-2 border rounded"></textarea>
+                </div>
+                <div>
+                    <select v-model="editingCampaign.type" class="w-full px-3 py-2 border rounded">
+                        <option value="">Select campaign type</option>
+                        <option v-for="type in campaignTypes" :key="type.id" :value="type.id">{{ type.name }}</option>
+                    </select>
+                </div>
+                <div>
+                    <select v-model="editingCampaign.branch_ids" multiple class="w-full px-3 py-2 border rounded h-24">
+                        <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
+                    </select>
+                    <small class="text-gray-500">Hold Ctrl (Windows) or Cmd (Mac) to select multiple branches</small>
+                </div>
+                <div class="col-span-2 flex gap-2">
+                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded w-full">Save</button>
+                    <button type="button" @click="cancelEditCampaign" class="bg-gray-300 text-gray-700 px-4 py-2 rounded w-full">Cancel</button>
+                </div>
+            </form>
+            <!-- Campaigns List -->
+            <div class="space-y-4">
+                <div v-for="(campaigns, type) in campaignsByType" :key="type" class="bg-white rounded-lg shadow p-4">
+                    <h3 class="text-lg font-semibold mb-3">{{ type.replace('_', ' ').toUpperCase() }}</h3>
+                    <div class="space-y-2">
+                        <div v-for="campaign in campaigns" :key="campaign.id" class="flex justify-between items-center p-3 bg-gray-50 rounded">
+                            <div>
+                                <h4 class="font-medium">{{ campaign.name }}</h4>
+                                <p class="text-sm text-gray-600">{{ campaign.description }}</p>
+                                <div class="mt-1">
+                                    <span v-for="branchId in campaign.branch_ids" :key="branchId" 
+                                          class="inline-block bg-gray-200 rounded-full px-2 py-1 text-xs mr-1">
+                                        {{ getBranchName(branchId) }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button @click="editCampaign(campaign)" 
+                                        class="text-blue-600 hover:text-blue-800">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button @click="deleteCampaign(campaign.id)" 
+                                        class="text-red-600 hover:text-red-800">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div v-else-if="activeTab === 'tags'">
+            <h2 class="text-xl font-semibold mb-4">Tags</h2>
+            <form v-if="!editingTag" @submit.prevent="createTag" class="flex space-x-2 mb-4">
+                <input v-model="newTag" type="text" placeholder="New tag" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded">Add</button>
+            </form>
+            <form v-else @submit.prevent="updateTag" class="flex space-x-2 mb-4">
+                <input v-model="editingTag.name" type="text" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
+                <button type="button" @click="cancelEditTag" class="bg-gray-300 text-gray-700 px-4 py-2 rounded">Cancel</button>
+            </form>
+            <ul>
+                <li v-for="tag in tags" :key="tag.id" class="flex justify-between items-center py-2 border-b">
+                    <span>{{ tag.name }}</span>
+                    <div class="flex space-x-2">
+                        <button @click="editTag(tag)" class="text-blue-600 hover:text-blue-800"><i class="fas fa-edit"></i></button>
+                        <button @click="deleteTag(tag.id)" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div v-else-if="activeTab === 'statuses'">
+            <h2 class="text-xl font-semibold mb-4">Statuses</h2>
+            <form v-if="!editingStatus" @submit.prevent="createStatus" class="flex space-x-2 mb-4">
+                <input v-model="newStatus" type="text" placeholder="New status" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded">Add</button>
+            </form>
+            <form v-else @submit.prevent="updateStatus" class="flex space-x-2 mb-4">
+                <input v-model="editingStatus.name" type="text" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
+                <button type="button" @click="cancelEditStatus" class="bg-gray-300 text-gray-700 px-4 py-2 rounded">Cancel</button>
+            </form>
+            <ul>
+                <li v-for="status in statuses" :key="status.id" class="flex justify-between items-center py-2 border-b">
+                    <span>{{ status.name }}</span>
+                    <div class="flex space-x-2">
+                        <button @click="editStatus(status)" class="text-blue-600 hover:text-blue-800"><i class="fas fa-edit"></i></button>
+                        <button @click="deleteStatus(status.id)" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div v-else-if="activeTab === 'branches'">
+            <div class="max-w-2xl mx-auto">
+                <div class="bg-white rounded-xl shadow-lg p-8 mb-8 border border-gray-100">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                        <i class="fas fa-code-branch text-indigo-500"></i> Branches
+                    </h2>
+                    <form v-if="!editingBranch" @submit.prevent="createBranch" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <input v-model="newBranchName" type="text" placeholder="Branch name" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
+                        <input v-model="newBranchStreet" type="text" placeholder="Street" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
+                        <input v-model="newBranchCity" type="text" placeholder="City" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
+                        <input v-model="newBranchState" type="text" placeholder="State" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
+                        <input v-model="newBranchZip" type="text" placeholder="Zip Code" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition md:col-span-2">
+                        <button type="submit" class="col-span-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow transition flex items-center justify-center gap-2">
+                            <i class="fas fa-plus"></i> Add Branch
+                        </button>
+                    </form>
+                    <form v-else @submit.prevent="updateBranch" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <input v-model="editingBranch.name" type="text" placeholder="Branch name" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
+                        <input v-model="editingBranch.street" type="text" placeholder="Street" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
+                        <input v-model="editingBranch.city" type="text" placeholder="City" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
+                        <input v-model="editingBranch.state" type="text" placeholder="State" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition">
+                        <input v-model="editingBranch.zip_code" type="text" placeholder="Zip Code" class="px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition md:col-span-2">
+                        <div class="col-span-2 flex gap-2">
+                            <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-lg shadow flex-1 transition flex items-center justify-center gap-2">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                            <button type="button" @click="cancelEditBranch" class="bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-3 rounded-lg shadow flex-1 transition flex items-center justify-center gap-2">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                        </div>
+                    </form>
+                    <div class="mt-8">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-700">Branch List</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full bg-white rounded-lg shadow border border-gray-100">
+                                <thead>
+                                    <tr class="bg-gray-50">
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Street</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Zip</th>
+                                        <th class="px-6 py-3"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="branch in branches" :key="branch.id" class="hover:bg-indigo-50 transition">
+                                        <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{{ branch.name }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">{{ branch.street }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">{{ branch.city }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">{{ branch.state }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">{{ branch.zip_code }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-right flex gap-2">
+                                            <button @click="editBranch(branch)" class="text-blue-600 hover:text-blue-800 transition"><i class="fas fa-edit"></i></button>
+                                            <button @click="deleteBranch(branch.id)" class="text-red-600 hover:text-red-800 transition"><i class="fas fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div v-else-if="activeTab === 'campaign_types'">
+            <h2 class="text-xl font-semibold mb-4">Campaign Types</h2>
+            <form v-if="!editingCampaignType" @submit.prevent="createCampaignType" class="flex space-x-2 mb-4">
+                <input v-model="newCampaignType" type="text" placeholder="New campaign type" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded">Add</button>
+            </form>
+            <form v-else @submit.prevent="updateCampaignType" class="flex space-x-2 mb-4">
+                <input v-model="editingCampaignType.name" type="text" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
+                <button type="button" @click="cancelEditCampaignType" class="bg-gray-300 text-gray-700 px-4 py-2 rounded">Cancel</button>
+            </form>
+            <ul>
+                <li v-for="type in campaignTypes" :key="type.id" class="flex justify-between items-center py-2 border-b">
+                    <span>{{ type.name }}</span>
+                    <div class="flex space-x-2">
+                        <button @click="editCampaignType(type)" class="text-blue-600 hover:text-blue-800"><i class="fas fa-edit"></i></button>
+                        <button @click="deleteCampaignType(type.id)" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div v-else-if="activeTab === 'sales_persons'">
+            <h2 class="text-xl font-semibold mb-4">Sales Persons</h2>
+            <form v-if="!editingSalesPerson" @submit.prevent="createSalesPerson" class="flex space-x-2 mb-4">
+                <input v-model="newSalesPerson" type="text" placeholder="Sales person name" class="flex-1 px-3 py-2 border rounded">
+                <select v-model="newSalesPersonBranchId" class="w-48 px-3 py-2 border rounded">
+                    <option value="">No Branch</option>
+                    <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
+                </select>
+                <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded">Add</button>
+            </form>
+            <form v-else @submit.prevent="updateSalesPerson" class="flex space-x-2 mb-4">
+                <input v-model="editingSalesPerson.name" type="text" class="flex-1 px-3 py-2 border rounded">
+                <select v-model="editingSalesPerson.branch_id" class="w-48 px-3 py-2 border rounded">
+                    <option value="">No Branch</option>
+                    <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
+                </select>
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
+                <button type="button" @click="cancelEditSalesPerson" class="bg-gray-300 text-gray-700 px-4 py-2 rounded">Cancel</button>
+            </form>
+            <ul>
+                <li v-for="person in salesPersons" :key="person.id" class="flex justify-between items-center py-2 border-b">
+                    <span>{{ person.name }} <span v-if="person.branch_id" class="text-xs text-gray-400">(Branch: {{ getBranchName(person.branch_id) }})</span></span>
+                    <div class="flex space-x-2">
+                        <button @click="editSalesPerson(person)" class="text-blue-600 hover:text-blue-800"><i class="fas fa-edit"></i></button>
+                        <button @click="deleteSalesPerson(person.id)" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div v-else-if="activeTab === 'conditions'">
+            <h2 class="text-xl font-semibold mb-4">Conditions</h2>
+            <form v-if="!editingCondition" @submit.prevent="createCondition" class="flex space-x-2 mb-4">
+                <input v-model="newCondition" type="text" placeholder="New condition" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded">Add</button>
+            </form>
+            <form v-else @submit.prevent="updateCondition" class="flex space-x-2 mb-4">
+                <input v-model="editingCondition.name" type="text" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
+                <button type="button" @click="cancelEditCondition" class="bg-gray-300 text-gray-700 px-4 py-2 rounded">Cancel</button>
+            </form>
+            <ul>
+                <li v-for="condition in conditions" :key="condition.id" class="flex justify-between items-center py-2 border-b">
+                    <span>{{ condition.name }}</span>
+                    <div class="flex space-x-2">
+                        <button @click="editCondition(condition)" class="text-blue-600 hover:text-blue-800"><i class="fas fa-edit"></i></button>
+                        <button @click="deleteCondition(condition.id)" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div v-else-if="activeTab === 'sources'">
+            <h2 class="text-xl font-semibold mb-4">Sources</h2>
+            <form v-if="!editingSource" @submit.prevent="createSource" class="flex space-x-2 mb-4">
+                <input v-model="newSource" type="text" placeholder="New source" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded">Add</button>
+            </form>
+            <form v-else @submit.prevent="updateSource" class="flex space-x-2 mb-4">
+                <input v-model="editingSource.name" type="text" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
+                <button type="button" @click="cancelEditSource" class="bg-gray-300 text-gray-700 px-4 py-2 rounded">Cancel</button>
+            </form>
+            <ul>
+                <li v-for="source in sources" :key="source.id" class="flex justify-between items-center py-2 border-b">
+                    <span>{{ source.name }}</span>
+                    <div class="flex space-x-2">
+                        <button @click="editSource(source)" class="text-blue-600 hover:text-blue-800"><i class="fas fa-edit"></i></button>
+                        <button @click="deleteSource(source.id)" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div v-else-if="activeTab === 'proposal_statuses'">
+            <h2 class="text-xl font-semibold mb-4">Proposal Statuses</h2>
+            <form v-if="!editingProposalStatus" @submit.prevent="createProposalStatus" class="flex space-x-2 mb-4">
+                <input v-model="newProposalStatus" type="text" placeholder="New proposal status" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded">Add</button>
+            </form>
+            <form v-else @submit.prevent="updateProposalStatus" class="flex space-x-2 mb-4">
+                <input v-model="editingProposalStatus.name" type="text" class="flex-1 px-3 py-2 border rounded">
+                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
+                <button type="button" @click="cancelEditProposalStatus" class="bg-gray-300 text-gray-700 px-4 py-2 rounded">Cancel</button>
+            </form>
+            <ul>
+                <li v-for="status in proposalStatuses" :key="status.id" class="flex justify-between items-center py-2 border-b">
+                    <span>{{ status.name }}</span>
+                    <div class="flex space-x-2">
+                        <button @click="editProposalStatus(status)" class="text-blue-600 hover:text-blue-800"><i class="fas fa-edit"></i></button>
+                        <button @click="deleteProposalStatus(status.id)" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </div>
+    <script>
+    const { createApp } = Vue;
+    createApp({
+        data() {
+            return {
+                tabs: [
+                    { key: 'campaigns', label: 'Campaigns' },
+                    { key: 'tags', label: 'Tags' },
+                    { key: 'statuses', label: 'Statuses' },
+                    { key: 'branches', label: 'Branches' },
+                    { key: 'campaign_types', label: 'Campaign Types' },
+                    { key: 'sales_persons', label: 'Sales Persons' },
+                    { key: 'conditions', label: 'Conditions' },
+                    { key: 'sources', label: 'Sources' },
+                    { key: 'proposal_statuses', label: 'Proposal Statuses' }
+                ],
+                activeTab: 'campaigns',
+                notifications: [],
+                notificationId: 0,
+                // Data for each section
+                tags: [], newTag: '',
+                statuses: [], newStatus: '',
+                branches: [], newBranchName: '',
+                newBranchStreet: '', newBranchCity: '', newBranchState: '', newBranchZip: '',
+                campaignTypes: [], newCampaignType: '',
+                salesPersons: [], newSalesPerson: '', newSalesPersonBranchId: '',
+                conditions: [], newCondition: '',
+                sources: [], newSource: '',
+                campaigns: {},
+                newCampaign: {
+                    name: '',
+                    description: '',
+                    type: '',
+                    branch_ids: []
+                },
+                editingTag: null,
+                editingStatus: null,
+                editingBranch: null,
+                editingCampaignType: null,
+                editingSalesPerson: null,
+                editingCondition: null,
+                editingSource: null,
+                editingCampaign: null,
+                showNewCampaignModal: false,
+                proposalStatuses: [],
+                newProposalStatus: '',
+                editingProposalStatus: null,
+            }
+        },
+        computed: {
+            campaignsByType() {
+                return this.campaigns;
+            }
+        },
+        methods: {
+            addNotification(message, type = 'success') {
+                const id = this.notificationId++;
+                this.notifications.push({ id, message, type });
+                setTimeout(() => this.removeNotification(id), 5000);
+            },
+            removeNotification(id) {
+                this.notifications = this.notifications.filter(n => n.id !== id);
+            },
+            // TAGS
+            async loadTags() {
+                try {
+                    const res = await axios.get('/admin/tags');
+                    this.tags = res.data;
+                } catch (error) {
+                    this.addNotification('Error loading tags: ' + (error.response?.data?.error || error.message), 'error');
+                }
+            },
+            async createTag() {
+                if (!this.newTag) {
+                    this.addNotification('Tag name is required', 'error');
+                    return;
+                }
+                try {
+                    await axios.post('/admin/tags', { name: this.newTag });
+                    this.newTag = '';
+                    this.loadTags();
+                    this.addNotification('Tag created successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error creating tag', 'error');
+                }
+            },
+            async deleteTag(id) {
+                if (!confirm('¿Estás seguro que deseas borrar este tag?')) return;
+                try {
+                    await axios.delete(`/admin/tags/${id}`);
+                    this.loadTags();
+                    this.addNotification('Tag deleted successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error deleting tag', 'error');
+                }
+            },
+            editTag(tag) { this.editingTag = { ...tag }; },
+            async updateTag() {
+                try {
+                    await axios.put(`/admin/tags/${this.editingTag.id}`, { name: this.editingTag.name });
+                    this.editingTag = null;
+                    this.loadTags();
+                    this.addNotification('Tag updated successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error updating tag', 'error');
+                }
+            },
+            cancelEditTag() { this.editingTag = null; },
+            // STATUSES
+            async loadStatuses() {
+                try {
+                    const res = await axios.get('/admin/statuses');
+                    this.statuses = res.data;
+                } catch (error) {
+                    this.addNotification('Error loading statuses: ' + (error.response?.data?.error || error.message), 'error');
+                }
+            },
+            async createStatus() {
+                if (!this.newStatus) {
+                    this.addNotification('Status name is required', 'error');
+                    return;
+                }
+                try {
+                    await axios.post('/admin/statuses', { name: this.newStatus });
+                    this.newStatus = '';
+                    this.loadStatuses();
+                    this.addNotification('Status created successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error creating status', 'error');
+                }
+            },
+            async deleteStatus(id) {
+                if (!confirm('¿Estás seguro que deseas borrar este status?')) return;
+                try {
+                    await axios.delete(`/admin/statuses/${id}`);
+                    this.loadStatuses();
+                    this.addNotification('Status deleted successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error deleting status', 'error');
+                }
+            },
+            editStatus(status) { this.editingStatus = { ...status }; },
+            async updateStatus() {
+                try {
+                    await axios.put(`/admin/statuses/${this.editingStatus.id}`, { name: this.editingStatus.name });
+                    this.editingStatus = null;
+                    this.loadStatuses();
+                    this.addNotification('Status updated successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error updating status', 'error');
+                }
+            },
+            cancelEditStatus() { this.editingStatus = null; },
+            // BRANCHES
+            async loadBranches() {
+                try {
+                    const res = await axios.get('/admin/branches');
+                    this.branches = res.data;
+                } catch (error) {
+                    this.addNotification('Error loading branches: ' + (error.response?.data?.error || error.message), 'error');
+                }
+            },
+            async createBranch() {
+                if (!this.newBranchName || !this.newBranchStreet || !this.newBranchCity || !this.newBranchState || !this.newBranchZip) {
+                    this.addNotification('All branch fields are required', 'error');
+                    return;
+                }
+                try {
+                    await axios.post('/admin/branches', {
+                        name: this.newBranchName,
+                        street: this.newBranchStreet,
+                        city: this.newBranchCity,
+                        state: this.newBranchState,
+                        zip_code: this.newBranchZip
+                    });
+                    this.newBranchName = '';
+                    this.newBranchStreet = '';
+                    this.newBranchCity = '';
+                    this.newBranchState = '';
+                    this.newBranchZip = '';
+                    this.loadBranches();
+                    this.addNotification('Branch created successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error creating branch', 'error');
+                }
+            },
+            async deleteBranch(id) {
+                if (!confirm('¿Estás seguro que deseas borrar esta sucursal?')) return;
+                try {
+                    await axios.delete(`/admin/branches/${id}`);
+                    this.loadBranches();
+                    this.addNotification('Branch deleted successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error deleting branch', 'error');
+                }
+            },
+            editBranch(branch) { this.editingBranch = { ...branch }; },
+            async updateBranch() {
+                try {
+                    await axios.put(`/admin/branches/${this.editingBranch.id}`, {
+                        name: this.editingBranch.name,
+                        street: this.editingBranch.street,
+                        city: this.editingBranch.city,
+                        state: this.editingBranch.state,
+                        zip_code: this.editingBranch.zip_code
+                    });
+                    this.editingBranch = null;
+                    this.loadBranches();
+                    this.addNotification('Branch updated successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error updating branch', 'error');
+                }
+            },
+            cancelEditBranch() { this.editingBranch = null; },
+            // CAMPAIGN TYPES
+            async loadCampaignTypes() {
+                try {
+                    const res = await axios.get('/admin/campaign_types');
+                    this.campaignTypes = res.data;
+                } catch (error) {
+                    this.addNotification('Error loading campaign types: ' + (error.response?.data?.error || error.message), 'error');
+                }
+            },
+            async createCampaignType() {
+                if (!this.newCampaignType) {
+                    this.addNotification('Campaign type name is required', 'error');
+                    return;
+                }
+                try {
+                    await axios.post('/admin/campaign_types', { name: this.newCampaignType });
+                    this.newCampaignType = '';
+                    this.loadCampaignTypes();
+                    this.addNotification('Campaign type created successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error creating campaign type', 'error');
+                }
+            },
+            async deleteCampaignType(id) {
+                if (!confirm('¿Estás seguro que deseas borrar este tipo de campaña?')) return;
+                try {
+                    await axios.delete(`/admin/campaign_types/${id}`);
+                    this.loadCampaignTypes();
+                    this.addNotification('Campaign type deleted successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error deleting campaign type', 'error');
+                }
+            },
+            editCampaignType(type) { this.editingCampaignType = { ...type }; },
+            async updateCampaignType() {
+                try {
+                    await axios.put(`/admin/campaign_types/${this.editingCampaignType.id}`, { name: this.editingCampaignType.name });
+                    this.editingCampaignType = null;
+                    this.loadCampaignTypes();
+                    this.addNotification('Campaign type updated successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error updating campaign type', 'error');
+                }
+            },
+            cancelEditCampaignType() { this.editingCampaignType = null; },
+            // SALES PERSONS
+            async loadSalesPersons() {
+                try {
+                    const res = await axios.get('/admin/sales_persons');
+                    this.salesPersons = res.data;
+                } catch (error) {
+                    this.addNotification('Error loading sales persons: ' + (error.response?.data?.error || error.message), 'error');
+                }
+            },
+            async createSalesPerson() {
+                if (!this.newSalesPerson) {
+                    this.addNotification('Sales person name is required', 'error');
+                    return;
+                }
+                try {
+                    await axios.post('/admin/sales_persons', { 
+                        name: this.newSalesPerson, 
+                        branch_id: this.newSalesPersonBranchId || null 
+                    });
+                    this.newSalesPerson = '';
+                    this.newSalesPersonBranchId = '';
+                    this.loadSalesPersons();
+                    this.addNotification('Sales person created successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error creating sales person', 'error');
+                }
+            },
+            async deleteSalesPerson(id) {
+                if (!confirm('¿Estás seguro que deseas borrar este vendedor?')) return;
+                try {
+                    await axios.delete(`/admin/sales_persons/${id}`);
+                    this.loadSalesPersons();
+                    this.addNotification('Sales person deleted successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error deleting sales person', 'error');
+                }
+            },
+            editSalesPerson(person) { this.editingSalesPerson = { ...person }; },
+            async updateSalesPerson() {
+                try {
+                    await axios.put(`/admin/sales_persons/${this.editingSalesPerson.id}`, {
+                        name: this.editingSalesPerson.name,
+                        branch_id: this.editingSalesPerson.branch_id || null
+                    });
+                    this.editingSalesPerson = null;
+                    this.loadSalesPersons();
+                    this.addNotification('Sales person updated successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error updating sales person', 'error');
+                }
+            },
+            cancelEditSalesPerson() { this.editingSalesPerson = null; },
+            // CONDITIONS
+            async loadConditions() {
+                try {
+                    const res = await axios.get('/admin/conditions');
+                    this.conditions = res.data;
+                } catch (error) {
+                    this.addNotification('Error loading conditions: ' + (error.response?.data?.error || error.message), 'error');
+                }
+            },
+            async createCondition() {
+                if (!this.newCondition) {
+                    this.addNotification('Condition name is required', 'error');
+                    return;
+                }
+                try {
+                    await axios.post('/admin/conditions', { name: this.newCondition });
+                    this.newCondition = '';
+                    this.loadConditions();
+                    this.addNotification('Condition created successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error creating condition', 'error');
+                }
+            },
+            async deleteCondition(id) {
+                if (!confirm('¿Estás seguro que deseas borrar esta condición?')) return;
+                try {
+                    await axios.delete(`/admin/conditions/${id}`);
+                    this.loadConditions();
+                    this.addNotification('Condition deleted successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error deleting condition', 'error');
+                }
+            },
+            editCondition(condition) { this.editingCondition = { ...condition }; },
+            async updateCondition() {
+                try {
+                    await axios.put(`/admin/conditions/${this.editingCondition.id}`, { name: this.editingCondition.name });
+                    this.editingCondition = null;
+                    this.loadConditions();
+                    this.addNotification('Condition updated successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error updating condition', 'error');
+                }
+            },
+            cancelEditCondition() { this.editingCondition = null; },
+            // SOURCES
+            async loadSources() {
+                try {
+                    const res = await axios.get('/admin/sources');
+                    this.sources = res.data;
+                } catch (error) {
+                    this.addNotification('Error loading sources: ' + (error.response?.data?.error || error.message), 'error');
+                }
+            },
+            async createSource() {
+                if (!this.newSource) {
+                    this.addNotification('Source name is required', 'error');
+                    return;
+                }
+                try {
+                    await axios.post('/admin/sources', { name: this.newSource });
+                    this.newSource = '';
+                    this.loadSources();
+                    this.addNotification('Source created successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error creating source', 'error');
+                }
+            },
+            async deleteSource(id) {
+                if (!confirm('¿Estás seguro que deseas borrar esta fuente?')) return;
+                try {
+                    await axios.delete(`/admin/sources/${id}`);
+                    this.loadSources();
+                    this.addNotification('Source deleted successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error deleting source', 'error');
+                }
+            },
+            editSource(source) { this.editingSource = { ...source }; },
+            async updateSource() {
+                try {
+                    await axios.put(`/admin/sources/${this.editingSource.id}`, { name: this.editingSource.name });
+                    this.editingSource = null;
+                    this.loadSources();
+                    this.addNotification('Source updated successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error updating source', 'error');
+                }
+            },
+            cancelEditSource() { this.editingSource = null; },
+            // Helper for sales person branch name
+            getBranchName(branchId) {
+                const branch = this.branches.find(b => b.id === branchId);
+                return branch ? branch.name : '';
+            },
+            // CAMPAIGNS
+            async loadCampaigns() {
+                try {
+                    const res = await axios.get('/campaign');
+                    this.campaigns = res.data;
+                } catch (error) {
+                    this.addNotification('Error loading campaigns: ' + (error.response?.data?.error || error.message), 'error');
+                }
+            },
+            closeNewCampaignModal() {
+                this.showNewCampaignModal = false;
+                this.newCampaign = { name: '', description: '', type: '', branch_ids: [] };
+            },
+            async createCampaign() {
+                if (!this.newCampaign.name || !this.newCampaign.type || !this.newCampaign.branch_ids.length) {
+                    this.addNotification('Name, type, and at least one branch are required', 'error');
+                    return;
+                }
+                try {
+                    await axios.post('/campaign', this.newCampaign);
+                    this.closeNewCampaignModal();
+                    this.editingCampaign = null;
+                    this.loadCampaigns();
+                    this.addNotification('Campaign created successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error creating campaign', 'error');
+                }
+            },
+            async deleteCampaign(id) {
+                if (!confirm('¿Estás seguro que deseas borrar esta campaña?')) return;
+                try {
+                    await axios.delete(`/campaign/${id}`);
+                    this.loadCampaigns();
+                    this.addNotification('Campaign deleted successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error deleting campaign', 'error');
+                }
+            },
+            editCampaign(campaign) {
+                this.editingCampaign = {
+                    ...campaign,
+                    type: campaign.type_id || campaign.type,
+                    branch_ids: Array.isArray(campaign.branch_ids) ? [...campaign.branch_ids] : []
+                };
+            },
+            async updateCampaign() {
+                if (!this.editingCampaign.name || !this.editingCampaign.type || !this.editingCampaign.branch_ids.length) {
+                    this.addNotification('Name, type, and at least one branch are required', 'error');
+                    return;
+                }
+                try {
+                    await axios.put(`/campaign/${this.editingCampaign.id}`, {
+                        name: this.editingCampaign.name,
+                        description: this.editingCampaign.description,
+                        type: this.editingCampaign.type,
+                        branch_ids: this.editingCampaign.branch_ids
+                    });
+                    this.editingCampaign = null;
+                    this.loadCampaigns();
+                    this.addNotification('Campaign updated successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error updating campaign', 'error');
+                }
+            },
+            cancelEditCampaign() {
+                this.editingCampaign = null;
+            },
+            // Load all on mount
+            loadAll() {
+                this.loadTags();
+                this.loadStatuses();
+                this.loadBranches();
+                this.loadCampaignTypes();
+                this.loadSalesPersons();
+                this.loadConditions();
+                this.loadSources();
+                this.loadCampaigns();
+            },
+            async loadProposalStatuses() {
+                try {
+                    const res = await axios.get('/admin/proposal_statuses');
+                    this.proposalStatuses = res.data;
+                } catch (error) {
+                    this.addNotification('Error loading proposal statuses: ' + (error.response?.data?.error || error.message), 'error');
+                }
+            },
+            async createProposalStatus() {
+                if (!this.newProposalStatus) {
+                    this.addNotification('Proposal status name is required', 'error');
+                    return;
+                }
+                try {
+                    await axios.post('/admin/proposal_statuses', { name: this.newProposalStatus });
+                    this.newProposalStatus = '';
+                    this.loadProposalStatuses();
+                    this.addNotification('Proposal status created successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error creating proposal status', 'error');
+                }
+            },
+            async deleteProposalStatus(id) {
+                if (!confirm('¿Estás seguro que deseas borrar este estado de propuesta?')) return;
+                try {
+                    await axios.delete(`/admin/proposal_statuses/${id}`);
+                    this.loadProposalStatuses();
+                    this.addNotification('Proposal status deleted successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error deleting proposal status', 'error');
+                }
+            },
+            editProposalStatus(status) { this.editingProposalStatus = { ...status }; },
+            async updateProposalStatus() {
+                try {
+                    await axios.put(`/admin/proposal_statuses/${this.editingProposalStatus.id}`, { name: this.editingProposalStatus.name });
+                    this.editingProposalStatus = null;
+                    this.loadProposalStatuses();
+                    this.addNotification('Proposal status updated successfully');
+                } catch (error) {
+                    this.addNotification(error.response?.data?.error || 'Error updating proposal status', 'error');
+                }
+            },
+            cancelEditProposalStatus() { this.editingProposalStatus = null; },
+        },
+        mounted() {
+            this.loadAll();
+            this.loadProposalStatuses();
+        }
+    }).mount('#admin-app');
+    </script>
+</body>
+</html> 
