@@ -30,6 +30,7 @@ const upload = multer({
 // Insight routes
 router.get('/', insightController.getInsightsPage);
 router.get('/branches', insightController.getBranches);
+router.get('/lead-statuses', insightController.getLeadStatuses);
 router.get('/closed-leads', insightController.getClosedLeads);
 router.post('/import-closed-leads', upload.single('file'), insightController.importClosedLeads);
 router.post('/ai-chat', insightController.handleAiChat);
