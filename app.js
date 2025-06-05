@@ -74,6 +74,7 @@ app.use('/campaign', campaignRoutes);
 app.use('/lead', leadRoutes);
 app.use('/admin', adminRoutes);
 app.use('/import', importRoutes);
+console.log('🟠 [app.js] About to use insightRoutes for /insights. Current request URL:', req.originalUrl, 'Path:', req.path);
 app.use('/insights', insightRoutes);
 app.use('/mailchimp', mailchimpRoutes);
 

@@ -1,3 +1,4 @@
+console.log('🔵 [routes/insightRoutes.js] File loaded and router being configured.');
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
