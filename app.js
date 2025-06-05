@@ -15,12 +15,12 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-// CORS configuration - Super permissive for now, make more secure later
+// CORS configuration
 app.use(cors({
-    origin: true,
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Trust proxy for rate limiting and IP detection
@@ -35,13 +35,15 @@ app.use('/uploads', express.static('uploads'));
 
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: true,
-    saveUninitialized: true,
+    resave: false,
+    saveUninitialized: false,
     cookie: {
-        secure: false,
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
         httpOnly: true,
-        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
-    }
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: 'strict'
+    },
+    name: 'sessionId' // Custom name instead of connect.sid
 }));
 
 // View engine setup
