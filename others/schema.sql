@@ -5,6 +5,9 @@ CREATE SCHEMA IF NOT EXISTS leads_dashboard;
 SET search_path TO leads_dashboard;
 
 -- Drop existing tables in correct order (respecting dependencies)
+DROP TABLE IF EXISTS campaign_group_lead CASCADE;
+DROP TABLE IF EXISTS campaign_group CASCADE;
+DROP TABLE IF EXISTS lead_group CASCADE;
 DROP TABLE IF EXISTS lead_tag CASCADE;
 DROP TABLE IF EXISTS lead CASCADE;
 DROP TABLE IF EXISTS campaign_branch CASCADE;
@@ -13,6 +16,7 @@ DROP TABLE IF EXISTS campaign_type CASCADE;
 DROP TABLE IF EXISTS sales_person CASCADE;
 DROP TABLE IF EXISTS branch CASCADE;
 DROP TABLE IF EXISTS customer CASCADE;
+DROP TABLE IF EXISTS lead_group_category CASCADE;
 DROP TABLE IF EXISTS tag CASCADE;
 DROP TABLE IF EXISTS condition CASCADE;
 DROP TABLE IF EXISTS lead_status CASCADE;
@@ -20,6 +24,7 @@ DROP TABLE IF EXISTS source CASCADE;
 DROP TABLE IF EXISTS proposal_status CASCADE;
 DROP TABLE IF EXISTS property_type CASCADE;
 DROP TABLE IF EXISTS address CASCADE;
+DROP TABLE IF EXISTS "group" CASCADE;
 
 -- Create Address table
 CREATE TABLE address (
@@ -128,6 +133,15 @@ CREATE TABLE tag (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create Group table
+CREATE TABLE "group" (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create Condition table
 CREATE TABLE condition (
     id SERIAL PRIMARY KEY,
@@ -169,6 +183,37 @@ CREATE TABLE lead_tag (
     PRIMARY KEY (lead_id, tag_id)
 );
 
+-- Create Lead_Group table (many-to-many relationship)
+CREATE TABLE lead_group (
+    lead_id INTEGER REFERENCES lead(id) ON DELETE CASCADE,
+    group_id INTEGER REFERENCES "group"(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (lead_id, group_id)
+);
+
+-- === ENHANCED CAMPAIGN GROUP STRUCTURE ===
+-- Create Campaign_Group table (groups within campaigns)
+CREATE TABLE campaign_group (
+    id SERIAL PRIMARY KEY,
+    campaign_id INTEGER REFERENCES campaign(id) ON DELETE CASCADE,
+    group_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    lead_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create Campaign_Group_Lead table (many-to-many relationship between campaign groups and leads)
+CREATE TABLE campaign_group_lead (
+    id SERIAL PRIMARY KEY,
+    group_id INTEGER NOT NULL REFERENCES campaign_group(id) ON DELETE CASCADE,
+    lead_id INTEGER NOT NULL REFERENCES lead(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    assigned_by VARCHAR(100),
+    notes TEXT,
+    UNIQUE(group_id, lead_id)
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_lead_status ON lead(lead_status_id);
 CREATE INDEX idx_lead_sales_person ON lead(sales_person_id);
@@ -180,12 +225,20 @@ CREATE INDEX idx_lead_property_type ON lead(property_type_id);
 CREATE INDEX idx_customer_address ON customer(address_id);
 CREATE INDEX idx_lead_tag_lead ON lead_tag(lead_id);
 CREATE INDEX idx_lead_tag_tag ON lead_tag(tag_id);
+CREATE INDEX idx_lead_group_lead ON lead_group(lead_id);
+CREATE INDEX idx_lead_group_group ON lead_group(group_id);
 CREATE INDEX idx_branch_address ON branch(address_id);
 CREATE INDEX idx_campaign_type ON campaign(campaign_type_id);
 CREATE INDEX idx_campaign_branch_campaign ON campaign_branch(campaign_id);
 CREATE INDEX idx_campaign_branch_branch ON campaign_branch(branch_id);
 CREATE INDEX idx_lead_branch ON lead(branch_id);
 CREATE INDEX idx_lead_campaign ON lead(campaign_id);
+
+-- Create indexes for campaign group tables
+CREATE INDEX idx_campaign_group_campaign_id ON campaign_group(campaign_id);
+CREATE INDEX idx_campaign_group_lead_group_id ON campaign_group_lead(group_id);
+CREATE INDEX idx_campaign_group_lead_lead_id ON campaign_group_lead(lead_id);
+CREATE INDEX idx_campaign_group_lead_assigned_at ON campaign_group_lead(assigned_at);
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -260,4 +313,24 @@ CREATE TRIGGER update_condition_updated_at
 CREATE TRIGGER update_lead_updated_at
     BEFORE UPDATE ON lead
     FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column(); 
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_group_updated_at
+    BEFORE UPDATE ON "group"
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create trigger for campaign_group updated_at
+CREATE TRIGGER update_campaign_group_updated_at
+    BEFORE UPDATE ON campaign_group
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Add comments for documentation
+COMMENT ON TABLE campaign_group IS 'Groups within campaigns to organize leads';
+COMMENT ON TABLE campaign_group_lead IS 'Junction table linking campaign groups to leads - supports many-to-many relationship';
+COMMENT ON COLUMN campaign_group_lead.group_id IS 'Foreign key to campaign_group table';
+COMMENT ON COLUMN campaign_group_lead.lead_id IS 'Foreign key to lead table';
+COMMENT ON COLUMN campaign_group_lead.assigned_at IS 'When the lead was assigned to this group';
+COMMENT ON COLUMN campaign_group_lead.assigned_by IS 'Who assigned the lead to this group';
+COMMENT ON COLUMN campaign_group_lead.notes IS 'Optional notes about this assignment'; 

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Leads Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        .login-card {
+            animation: slideUp 0.6s ease-out;
+        }
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .floating-label {
+            transition: all 0.2s ease;
+        }
+        .input-focused .floating-label {
+            transform: translateY(-1.5rem) scale(0.85);
+            color: #6366f1;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <div id="app" class="min-h-screen flex items-center justify-center p-4">
+        <!-- Main Container -->
+        <div class="w-full max-w-md">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-12 h-12 bg-indigo-600 rounded-lg mb-4">
+                    <i class="fas fa-chart-line text-xl text-white"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Leads Dashboard</h1>
+                <p class="text-gray-600 dark:text-gray-400">Sign in to your account</p>
+            </div>
+
+            <!-- Login Card -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 login-card transition-colors duration-200">
+                <!-- Alert Messages -->
+                <div v-if="alert.show" :class="[
+                    'mb-6 p-4 rounded-lg border transition-all duration-300',
+                    alert.type === 'error' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300' :
+                    alert.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300' :
+                    alert.type === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300' :
+                    'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                ]">
+                    <div class="flex items-start">
+                        <i :class="[
+                            'mr-3 mt-0.5',
+                            alert.type === 'error' ? 'fas fa-exclamation-triangle' :
+                            alert.type === 'success' ? 'fas fa-check-circle' :
+                            alert.type === 'warning' ? 'fas fa-exclamation-circle' :
+                            'fas fa-info-circle'
+                        ]"></i>
+                        <div class="flex-1">
+                            <p class="font-medium">{{ alert.title }}</p>
+                            <p v-if="alert.message" class="text-sm mt-1 opacity-90">{{ alert.message }}</p>
+                        </div>
+                        <button @click="clearAlert" class="ml-auto text-current hover:opacity-70 transition-opacity">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Login Form -->
+                <form @submit.prevent="login" class="space-y-6">
+                    <!-- Username/Email Field -->
+                    <div class="relative">
+                        <div :class="['relative', { 'input-focused': form.credential || credentialFocused }]">
+                            <input 
+                                v-model="form.credential"
+                                @focus="credentialFocused = true"
+                                @blur="credentialFocused = false"
+                                type="text"
+                                id="credential"
+                                class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder-transparent"
+                                placeholder="Username or Email"
+                                required
+                                :disabled="isLoading">
+                            <label for="credential" class="floating-label absolute left-4 top-3 text-gray-500 dark:text-gray-400 pointer-events-none bg-gray-50 dark:bg-gray-700 px-1">
+                                <i class="fas fa-user mr-2"></i>Username or Email
+                            </label>
+                        </div>
+                        <div v-if="form.errors.credential" class="mt-2 text-sm text-red-600 dark:text-red-400">
+                            {{ form.errors.credential }}
+                        </div>
+                    </div>
+
+                    <!-- Password Field -->
+                    <div class="relative">
+                        <div :class="['relative', { 'input-focused': form.password || passwordFocused }]">
+                            <input 
+                                v-model="form.password"
+                                @focus="passwordFocused = true"
+                                @blur="passwordFocused = false"
+                                :type="showPassword ? 'text' : 'password'"
+                                id="password"
+                                class="w-full px-4 py-3 pr-12 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder-transparent"
+                                placeholder="Password"
+                                required
+                                :disabled="isLoading">
+                            <label for="password" class="floating-label absolute left-4 top-3 text-gray-500 dark:text-gray-400 pointer-events-none bg-gray-50 dark:bg-gray-700 px-1">
+                                <i class="fas fa-lock mr-2"></i>Password
+                            </label>
+                            <button 
+                                type="button"
+                                @click="showPassword = !showPassword"
+                                class="absolute right-3 top-3 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                                :disabled="isLoading">
+                                <i :class="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                            </button>
+                        </div>
+                        <div v-if="form.errors.password" class="mt-2 text-sm text-red-600 dark:text-red-400">
+                            {{ form.errors.password }}
+                        </div>
+                    </div>
+
+                    <!-- Remember Me & Forgot Password -->
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center cursor-pointer">
+                            <input 
+                                v-model="form.rememberMe"
+                                type="checkbox"
+                                class="w-4 h-4 text-indigo-600 bg-gray-100 dark:bg-gray-600 border-gray-300 dark:border-gray-500 rounded focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:ring-2"
+                                :disabled="isLoading">
+                            <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">Remember me</span>
+                        </label>
+                        <a href="#" @click.prevent="showForgotPassword = true" class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors">
+                            Forgot password?
+                        </a>
+                    </div>
+
+                    <!-- Login Button -->
+                    <button 
+                        type="submit"
+                        :disabled="isLoading || !isFormValid"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                        <div v-if="isLoading" class="flex items-center justify-center">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Signing in...
+                        </div>
+                        <div v-else class="flex items-center justify-center">
+                            <i class="fas fa-sign-in-alt mr-2"></i>
+                            Sign In
+                        </div>
+                    </button>
+                </form>
+
+                <!-- Security Info -->
+                <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-center space-x-6 text-xs text-gray-500 dark:text-gray-400">
+                        <div class="flex items-center">
+                            <i class="fas fa-shield-alt mr-1.5 text-green-500"></i>
+                            <span>Secure</span>
+                        </div>
+                        <div class="flex items-center">
+                            <i class="fas fa-lock mr-1.5 text-blue-500"></i>
+                            <span>Encrypted</span>
+                        </div>
+                        <div class="flex items-center">
+                            <i class="fas fa-clock mr-1.5 text-yellow-500"></i>
+                            <span>Protected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="text-center mt-8">
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    &copy; 2025 Leads Dashboard. All rights reserved.
+                </p>
+            </div>
+        </div>
+
+        <!-- Forgot Password Modal -->
+        <div v-if="showForgotPassword" class="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center p-4 z-50 transition-opacity duration-200">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 max-w-md w-full p-6 transition-all duration-200">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Reset Password</h3>
+                    <button @click="showForgotPassword = false" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Enter your email address and we'll send you a link to reset your password.
+                </p>
+                <form @submit.prevent="resetPassword">
+                    <div class="mb-4">
+                        <input 
+                            v-model="resetForm.email"
+                            type="email"
+                            placeholder="Email address"
+                            class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 dark:text-gray-100 transition-colors duration-200"
+                            required>
+                    </div>
+                    <div class="flex space-x-3">
+                        <button 
+                            type="button"
+                            @click="showForgotPassword = false"
+                            class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-200">
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit"
+                            class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors duration-200">
+                            Send Reset Link
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    // Form data
+                    form: {
+                        credential: '',
+                        password: '',
+                        rememberMe: false,
+                        errors: {}
+                    },
+                    
+                    // UI states
+                    isLoading: false,
+                    showPassword: false,
+                    credentialFocused: false,
+                    passwordFocused: false,
+                    showForgotPassword: false,
+                    
+                    // Alert system
+                    alert: {
+                        show: false,
+                        type: '',
+                        title: '',
+                        message: ''
+                    },
+                    
+                    // Reset password form
+                    resetForm: {
+                        email: ''
+                    }
+                }
+            },
+            
+            computed: {
+                isFormValid() {
+                    return this.form.credential.trim().length >= 3 && 
+                           this.form.password.length >= 1;
+                }
+            },
+            
+            methods: {
+                async login() {
+                    if (!this.isFormValid || this.isLoading) return;
+                    
+                    this.isLoading = true;
+                    this.clearAlert();
+                    this.form.errors = {};
+                    
+                    try {
+                        const payload = {
+                            credential: this.form.credential.trim(),
+                            password: this.form.password,
+                            rememberMe: this.form.rememberMe
+                        };
+                        
+                        console.log('🔐 Attempting login with:', payload.credential);
+                        
+                        const response = await axios.post('/api/auth/login', payload, {
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            withCredentials: true
+                        });
+                        
+                        console.log('📥 Login response received:', response.data);
+                        
+                        if (response.data.accessToken) {
+                            // Store access token
+                            console.log('💾 Storing access token in localStorage...');
+                            localStorage.setItem('accessToken', response.data.accessToken);
+                            localStorage.setItem('user', JSON.stringify(response.data.user));
+                            
+                            // Verify storage
+                            const storedToken = localStorage.getItem('accessToken');
+                            const storedUser = localStorage.getItem('user');
+                            console.log('✅ Token stored successfully:', storedToken ? 'Yes' : 'No');
+                            console.log('✅ User stored successfully:', storedUser ? 'Yes' : 'No');
+                            
+                            this.showAlert('success', 'Login Successful', 
+                                `Welcome back, ${response.data.user.firstName || response.data.user.username}!`);
+                            
+                            // Redirect to dashboard after short delay
+                            setTimeout(() => {
+                                console.log('🚀 Redirecting to dashboard...');
+                                window.location.href = '/dashboard';
+                            }, 1500);
+                        } else {
+                            console.error('❌ No access token in response');
+                            this.showAlert('error', 'Login Failed', 'No access token received');
+                        }
+                        
+                    } catch (error) {
+                        console.error('Login error:', error);
+                        
+                        if (error.response) {
+                            const { status, data } = error.response;
+                            
+                            switch (status) {
+                                case 400:
+                                    if (data.details) {
+                                        // Handle validation errors
+                                        data.details.forEach(err => {
+                                            this.form.errors[err.path] = err.msg;
+                                        });
+                                    } else {
+                                        this.showAlert('error', 'Invalid Input', data.error);
+                                    }
+                                    break;
+                                    
+                                case 401:
+                                    this.showAlert('error', 'Authentication Failed', 
+                                        'Invalid username/email or password. Please try again.');
+                                    break;
+                                    
+                                case 403:
+                                    this.showAlert('error', 'Account Disabled', 
+                                        'Your account has been deactivated. Please contact support.');
+                                    break;
+                                    
+                                case 423:
+                                    const lockedUntil = new Date(data.lockedUntil).toLocaleTimeString();
+                                    this.showAlert('warning', 'Account Temporarily Locked', 
+                                        `Too many failed attempts. Try again after ${lockedUntil}.`);
+                                    break;
+                                    
+                                case 429:
+                                    this.showAlert('warning', 'Too Many Attempts', 
+                                        'You\'ve made too many login attempts. Please wait before trying again.');
+                                    break;
+                                    
+                                default:
+                                    this.showAlert('error', 'Login Failed', 
+                                        data.error || 'An unexpected error occurred.');
+                            }
+                        } else {
+                            this.showAlert('error', 'Connection Error', 
+                                'Unable to connect to the server. Please check your internet connection.');
+                        }
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+                
+                async resetPassword() {
+                    if (!this.resetForm.email) return;
+                    
+                    try {
+                        // API call for password reset would go here
+                        this.showAlert('info', 'Reset Link Sent', 
+                            'If an account with that email exists, you\'ll receive a password reset link.');
+                        this.showForgotPassword = false;
+                        this.resetForm.email = '';
+                    } catch (error) {
+                        this.showAlert('error', 'Reset Failed', 
+                            'Unable to send reset email. Please try again.');
+                    }
+                },
+                
+                showAlert(type, title, message = '') {
+                    this.alert = {
+                        show: true,
+                        type,
+                        title,
+                        message
+                    };
+                    
+                    // Auto-hide success messages
+                    if (type === 'success') {
+                        setTimeout(() => {
+                            this.clearAlert();
+                        }, 5000);
+                    }
+                },
+                
+                clearAlert() {
+                    this.alert.show = false;
+                },
+                
+                // Initialize app
+                init() {
+                    // Apply dark mode based on system preference or saved setting
+                    const savedDarkMode = localStorage.getItem('darkMode');
+                    if (savedDarkMode !== null) {
+                        // Use saved preference
+                        if (savedDarkMode === 'true') {
+                            document.documentElement.classList.add('dark');
+                        }
+                    } else {
+                        // Use system preference
+                        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                            document.documentElement.classList.add('dark');
+                        }
+                    }
+                    
+                    // Check if user is already logged in
+                    const token = localStorage.getItem('accessToken');
+                    if (token) {
+                        // Verify token is still valid
+                        axios.get('/api/auth/status', {
+                            headers: { Authorization: `Bearer ${token}` }
+                        }).then(() => {
+                            // Token is valid, redirect to dashboard
+                            window.location.href = '/dashboard';
+                        }).catch(() => {
+                            // Token is invalid, clear it
+                            localStorage.removeItem('accessToken');
+                            localStorage.removeItem('user');
+                        });
+                    }
+                    
+                    // Set up axios defaults
+                    axios.defaults.withCredentials = true;
+                    
+                    // Focus on first input
+                    setTimeout(() => {
+                        const firstInput = document.getElementById('credential');
+                        if (firstInput) firstInput.focus();
+                    }, 100);
+                }
+            },
+            
+            mounted() {
+                this.init();
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html> 

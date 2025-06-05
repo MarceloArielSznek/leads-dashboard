@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const { validationResult } = require('express-validator');
+const { runLeadSyncProcess } = require('../fetch_leads.js'); // Corrected path
 
 // Admin panel view
 exports.getAdminPanel = (req, res) => {
@@ -167,25 +168,23 @@ exports.createBranch = async (req, res) => {
             return res.status(400).json({ error: 'Branch name is required' });
         }
 
-        const existingBranch = await db.query('SELECT * FROM leads_dashboard.branch WHERE LOWER(name) = LOWER($1)', [name]);
-        if (existingBranch.rows.length > 0) {
-            return res.status(400).json({ error: 'Branch already exists' });
-        }
-
-        // Create address first
-        const addressResult = await db.query(
-            'INSERT INTO leads_dashboard.address (street, city, state, zip_code) VALUES ($1, $2, $3, $4) RETURNING id',
-            [street, city, state, zip_code]
-        );
+        // First create address
+        const addressResult = await db.query('INSERT INTO leads_dashboard.address (street, city, state, zip_code) VALUES ($1, $2, $3, $4) RETURNING *', [street, city, state, zip_code]);
         const addressId = addressResult.rows[0].id;
 
-        // Create branch with address
-        const branchResult = await db.query(
-            'INSERT INTO leads_dashboard.branch (name, address_id) VALUES ($1, $2) RETURNING *',
-            [name, addressId]
-        );
+        // Then create branch
+        const result = await db.query('INSERT INTO leads_dashboard.branch (name, address_id) VALUES ($1, $2) RETURNING *', [name, addressId]);
 
-        res.json(branchResult.rows[0]);
+        // Return branch with address info
+        const branchWithAddress = {
+            ...result.rows[0],
+            street,
+            city,
+            state,
+            zip_code
+        };
+        
+        res.json(branchWithAddress);
     } catch (error) {
         console.error('Error creating branch:', error);
         res.status(500).json({ error: 'Error creating branch' });
@@ -196,22 +195,23 @@ exports.deleteBranch = async (req, res) => {
     try {
         const { id } = req.params;
         
-        const branchUsage = await db.query('SELECT COUNT(*) FROM leads_dashboard.sales_person WHERE branch_id = $1', [id]);
+        // Check if branch is being used by leads
+        const branchUsage = await db.query('SELECT COUNT(*) FROM leads_dashboard.lead WHERE branch_id = $1', [id]);
         if (branchUsage.rows[0].count > 0) {
-            return res.status(400).json({ error: 'Cannot delete branch that has sales persons assigned' });
+            return res.status(400).json({ error: 'Cannot delete branch that is being used by leads' });
         }
 
         // Get address_id before deleting branch
         const branch = await db.query('SELECT address_id FROM leads_dashboard.branch WHERE id = $1', [id]);
+        if (branch.rows.length === 0) {
+            return res.status(404).json({ error: 'Branch not found' });
+        }
         const addressId = branch.rows[0].address_id;
 
         // Delete branch first (due to foreign key constraint)
         await db.query('DELETE FROM leads_dashboard.branch WHERE id = $1', [id]);
-        
-        // Then delete address
-        if (addressId) {
+        // Then delete associated address
             await db.query('DELETE FROM leads_dashboard.address WHERE id = $1', [addressId]);
-        }
 
         res.json({ message: 'Branch deleted successfully' });
     } catch (error) {
@@ -241,73 +241,6 @@ exports.updateBranch = async (req, res) => {
     } catch (error) {
         console.error('Error updating branch:', error);
         res.status(500).json({ error: 'Error updating branch' });
-    }
-};
-
-// Campaign Types
-exports.getCampaignTypes = async (req, res) => {
-    try {
-        const result = await db.query('SELECT * FROM leads_dashboard.campaign_type ORDER BY name');
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error getting campaign types:', error);
-        res.status(500).json({ error: 'Error getting campaign types' });
-    }
-};
-
-exports.createCampaignType = async (req, res) => {
-    try {
-        const { name } = req.body;
-        
-        if (!name || name.trim().length === 0) {
-            return res.status(400).json({ error: 'Campaign type name is required' });
-        }
-
-        const existingType = await db.query('SELECT * FROM leads_dashboard.campaign_type WHERE LOWER(name) = LOWER($1)', [name]);
-        if (existingType.rows.length > 0) {
-            return res.status(400).json({ error: 'Campaign type already exists' });
-        }
-
-        const result = await db.query('INSERT INTO leads_dashboard.campaign_type (name) VALUES ($1) RETURNING *', [name]);
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error creating campaign type:', error);
-        res.status(500).json({ error: 'Error creating campaign type' });
-    }
-};
-
-exports.deleteCampaignType = async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const typeUsage = await db.query('SELECT COUNT(*) FROM leads_dashboard.campaign WHERE campaign_type_id = $1', [id]);
-        if (typeUsage.rows[0].count > 0) {
-            return res.status(400).json({ error: 'Cannot delete campaign type that is being used by campaigns' });
-        }
-
-        await db.query('DELETE FROM leads_dashboard.campaign_type WHERE id = $1', [id]);
-        res.json({ message: 'Campaign type deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting campaign type:', error);
-        res.status(500).json({ error: 'Error deleting campaign type' });
-    }
-};
-
-exports.updateCampaignType = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { name } = req.body;
-        if (!name || name.trim().length === 0) {
-            return res.status(400).json({ error: 'Campaign type name is required' });
-        }
-        const result = await db.query('UPDATE leads_dashboard.campaign_type SET name = $1 WHERE id = $2 RETURNING *', [name, id]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Campaign type not found' });
-        }
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error updating campaign type:', error);
-        res.status(500).json({ error: 'Error updating campaign type' });
     }
 };
 
@@ -600,5 +533,53 @@ exports.deleteProposalStatus = async (req, res) => {
     } catch (error) {
         console.error('Error deleting proposal status:', error);
         res.status(500).json({ error: 'Error deleting proposal status' });
+    }
+};
+
+// New method for API Lead Synchronization
+exports.syncLeadsWithApi = async (req, res) => {
+    console.log('--- ADMIN CONTROLLER: syncLeadsWithApi CALLED ---');
+    console.log('Received sync configuration from UI:', JSON.stringify(req.body, null, 2));
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array(), message: "Validation errors occurred." });
+    }
+
+    try {
+        const config = req.body; // Frontend sends the config object directly in the body
+        
+        // Basic validation for essential config properties (can be expanded)
+        if (typeof config.daysToLookBack !== 'number' || 
+            !Array.isArray(config.apiBranchIds) || 
+            typeof config.matchByName !== 'boolean' || 
+            typeof config.matchByAddress !== 'boolean' ||
+            typeof config.skipAlreadyMatchedDBLeads !== 'boolean' ||
+            typeof config.isDryRun !== 'boolean') {
+            return res.status(400).json({ message: "Invalid configuration for lead sync." });
+        }
+
+        // Ensure apiBranchIds are numbers if they aren't already (though frontend should send numbers)
+        config.apiBranchIds = config.apiBranchIds.map(id => Number(id));
+
+        const summary = await runLeadSyncProcess(config);
+
+        res.status(200).json({
+            success: true,
+            message: "Lead synchronization process completed.",
+            summary: summary 
+        });
+
+    } catch (error) {
+        console.error('Error during lead synchronization process:', error);
+        res.status(500).json({
+            success: false,
+            message: "An unexpected error occurred during lead synchronization.",
+            error: error.message,
+            summary: { // Send a partial summary if available, or an error state
+                logMessages: [`Error: ${error.message}`],
+                errors: [`Unhandled controller error: ${error.message}`]
+            }
+        });
     }
 }; 

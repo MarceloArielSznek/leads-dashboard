@@ -54,102 +54,7 @@
                 </button>
             </nav>
         </div>
-        <div v-if="activeTab === 'campaigns'">
-            <h2 class="text-xl font-semibold mb-4 flex items-center justify-between">
-                Campaigns
-                <button @click="showNewCampaignModal = true" class="bg-indigo-500 text-white px-4 py-2 rounded flex items-center gap-2">
-                    <i class="fas fa-plus"></i> New Campaign
-                </button>
-            </h2>
-            <!-- Modal de creación de campaña -->
-            <div v-if="showNewCampaignModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-lg relative">
-                    <button @click="closeNewCampaignModal" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl"><i class="fas fa-times"></i></button>
-                    <h3 class="text-lg font-semibold mb-4">Create Campaign</h3>
-                    <form @submit.prevent="createCampaign" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="col-span-2">
-                            <input v-model="newCampaign.name" type="text" placeholder="Campaign name" class="w-full px-3 py-2 border rounded">
-                        </div>
-                        <div class="col-span-2">
-                            <textarea v-model="newCampaign.description" placeholder="Campaign description" class="w-full px-3 py-2 border rounded"></textarea>
-                        </div>
-                        <div>
-                            <select v-model="newCampaign.type" class="w-full px-3 py-2 border rounded">
-                                <option value="">Select campaign type</option>
-                                <option v-for="type in campaignTypes" :key="type.id" :value="type.id">{{ type.name }}</option>
-                            </select>
-                        </div>
-                        <div>
-                            <select v-model="newCampaign.branch_ids" multiple class="w-full px-3 py-2 border rounded h-24">
-                                <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
-                            </select>
-                            <small class="text-gray-500">Hold Ctrl (Windows) or Cmd (Mac) to select multiple branches</small>
-                        </div>
-                        <div class="col-span-2 flex gap-2">
-                            <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded w-full">Create</button>
-                            <button type="button" @click="closeNewCampaignModal" class="bg-gray-300 text-gray-700 px-4 py-2 rounded w-full">Cancel</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            <!-- Fin modal -->
-            <form v-if="!editingCampaign" v-show="false" @submit.prevent="createCampaign" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"></form>
-            <form v-else @submit.prevent="updateCampaign" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div class="col-span-2">
-                    <input v-model="editingCampaign.name" type="text" placeholder="Campaign name" class="w-full px-3 py-2 border rounded">
-                </div>
-                <div class="col-span-2">
-                    <textarea v-model="editingCampaign.description" placeholder="Campaign description" class="w-full px-3 py-2 border rounded"></textarea>
-                </div>
-                <div>
-                    <select v-model="editingCampaign.type" class="w-full px-3 py-2 border rounded">
-                        <option value="">Select campaign type</option>
-                        <option v-for="type in campaignTypes" :key="type.id" :value="type.id">{{ type.name }}</option>
-                    </select>
-                </div>
-                <div>
-                    <select v-model="editingCampaign.branch_ids" multiple class="w-full px-3 py-2 border rounded h-24">
-                        <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
-                    </select>
-                    <small class="text-gray-500">Hold Ctrl (Windows) or Cmd (Mac) to select multiple branches</small>
-                </div>
-                <div class="col-span-2 flex gap-2">
-                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded w-full">Save</button>
-                    <button type="button" @click="cancelEditCampaign" class="bg-gray-300 text-gray-700 px-4 py-2 rounded w-full">Cancel</button>
-                </div>
-            </form>
-            <!-- Campaigns List -->
-            <div class="space-y-4">
-                <div v-for="(campaigns, type) in campaignsByType" :key="type" class="bg-white rounded-lg shadow p-4">
-                    <h3 class="text-lg font-semibold mb-3">{{ type.replace('_', ' ').toUpperCase() }}</h3>
-                    <div class="space-y-2">
-                        <div v-for="campaign in campaigns" :key="campaign.id" class="flex justify-between items-center p-3 bg-gray-50 rounded">
-                            <div>
-                                <h4 class="font-medium">{{ campaign.name }}</h4>
-                                <p class="text-sm text-gray-600">{{ campaign.description }}</p>
-                                <div class="mt-1">
-                                    <span v-for="branchId in campaign.branch_ids" :key="branchId" 
-                                          class="inline-block bg-gray-200 rounded-full px-2 py-1 text-xs mr-1">
-                                        {{ getBranchName(branchId) }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="flex space-x-2">
-                                <button @click="editCampaign(campaign)" 
-                                        class="text-blue-600 hover:text-blue-800">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button @click="deleteCampaign(campaign.id)" 
-                                        class="text-red-600 hover:text-red-800">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div v-else-if="activeTab === 'tags'">
+        <div v-if="activeTab === 'tags'">
             <h2 class="text-xl font-semibold mb-4">Tags</h2>
             <form v-if="!editingTag" @submit.prevent="createTag" class="flex space-x-2 mb-4">
                 <input v-model="newTag" type="text" placeholder="New tag" class="flex-1 px-3 py-2 border rounded">
@@ -255,27 +160,6 @@
                 </div>
             </div>
         </div>
-        <div v-else-if="activeTab === 'campaign_types'">
-            <h2 class="text-xl font-semibold mb-4">Campaign Types</h2>
-            <form v-if="!editingCampaignType" @submit.prevent="createCampaignType" class="flex space-x-2 mb-4">
-                <input v-model="newCampaignType" type="text" placeholder="New campaign type" class="flex-1 px-3 py-2 border rounded">
-                <button type="submit" class="bg-indigo-500 text-white px-4 py-2 rounded">Add</button>
-            </form>
-            <form v-else @submit.prevent="updateCampaignType" class="flex space-x-2 mb-4">
-                <input v-model="editingCampaignType.name" type="text" class="flex-1 px-3 py-2 border rounded">
-                <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save</button>
-                <button type="button" @click="cancelEditCampaignType" class="bg-gray-300 text-gray-700 px-4 py-2 rounded">Cancel</button>
-            </form>
-            <ul>
-                <li v-for="type in campaignTypes" :key="type.id" class="flex justify-between items-center py-2 border-b">
-                    <span>{{ type.name }}</span>
-                    <div class="flex space-x-2">
-                        <button @click="editCampaignType(type)" class="text-blue-600 hover:text-blue-800"><i class="fas fa-edit"></i></button>
-                        <button @click="deleteCampaignType(type.id)" class="text-red-600 hover:text-red-800"><i class="fas fa-trash"></i></button>
-                    </div>
-                </li>
-            </ul>
-        </div>
         <div v-else-if="activeTab === 'sales_persons'">
             <h2 class="text-xl font-semibold mb-4">Sales Persons</h2>
             <form v-if="!editingSalesPerson" @submit.prevent="createSalesPerson" class="flex space-x-2 mb-4">
@@ -375,17 +259,15 @@
         data() {
             return {
                 tabs: [
-                    { key: 'campaigns', label: 'Campaigns' },
                     { key: 'tags', label: 'Tags' },
                     { key: 'statuses', label: 'Statuses' },
                     { key: 'branches', label: 'Branches' },
-                    { key: 'campaign_types', label: 'Campaign Types' },
                     { key: 'sales_persons', label: 'Sales Persons' },
                     { key: 'conditions', label: 'Conditions' },
                     { key: 'sources', label: 'Sources' },
                     { key: 'proposal_statuses', label: 'Proposal Statuses' }
                 ],
-                activeTab: 'campaigns',
+                activeTab: 'tags',
                 notifications: [],
                 notificationId: 0,
                 // Data for each section
@@ -393,34 +275,18 @@
                 statuses: [], newStatus: '',
                 branches: [], newBranchName: '',
                 newBranchStreet: '', newBranchCity: '', newBranchState: '', newBranchZip: '',
-                campaignTypes: [], newCampaignType: '',
                 salesPersons: [], newSalesPerson: '', newSalesPersonBranchId: '',
                 conditions: [], newCondition: '',
                 sources: [], newSource: '',
-                campaigns: {},
-                newCampaign: {
-                    name: '',
-                    description: '',
-                    type: '',
-                    branch_ids: []
-                },
+                proposalStatuses: [],
+                newProposalStatus: '',
                 editingTag: null,
                 editingStatus: null,
                 editingBranch: null,
-                editingCampaignType: null,
                 editingSalesPerson: null,
                 editingCondition: null,
                 editingSource: null,
-                editingCampaign: null,
-                showNewCampaignModal: false,
-                proposalStatuses: [],
-                newProposalStatus: '',
                 editingProposalStatus: null,
-            }
-        },
-        computed: {
-            campaignsByType() {
-                return this.campaigns;
             }
         },
         methods: {
@@ -583,51 +449,6 @@
                 }
             },
             cancelEditBranch() { this.editingBranch = null; },
-            // CAMPAIGN TYPES
-            async loadCampaignTypes() {
-                try {
-                    const res = await axios.get('/admin/campaign_types');
-                    this.campaignTypes = res.data;
-                } catch (error) {
-                    this.addNotification('Error loading campaign types: ' + (error.response?.data?.error || error.message), 'error');
-                }
-            },
-            async createCampaignType() {
-                if (!this.newCampaignType) {
-                    this.addNotification('Campaign type name is required', 'error');
-                    return;
-                }
-                try {
-                    await axios.post('/admin/campaign_types', { name: this.newCampaignType });
-                    this.newCampaignType = '';
-                    this.loadCampaignTypes();
-                    this.addNotification('Campaign type created successfully');
-                } catch (error) {
-                    this.addNotification(error.response?.data?.error || 'Error creating campaign type', 'error');
-                }
-            },
-            async deleteCampaignType(id) {
-                if (!confirm('¿Estás seguro que deseas borrar este tipo de campaña?')) return;
-                try {
-                    await axios.delete(`/admin/campaign_types/${id}`);
-                    this.loadCampaignTypes();
-                    this.addNotification('Campaign type deleted successfully');
-                } catch (error) {
-                    this.addNotification(error.response?.data?.error || 'Error deleting campaign type', 'error');
-                }
-            },
-            editCampaignType(type) { this.editingCampaignType = { ...type }; },
-            async updateCampaignType() {
-                try {
-                    await axios.put(`/admin/campaign_types/${this.editingCampaignType.id}`, { name: this.editingCampaignType.name });
-                    this.editingCampaignType = null;
-                    this.loadCampaignTypes();
-                    this.addNotification('Campaign type updated successfully');
-                } catch (error) {
-                    this.addNotification(error.response?.data?.error || 'Error updating campaign type', 'error');
-                }
-            },
-            cancelEditCampaignType() { this.editingCampaignType = null; },
             // SALES PERSONS
             async loadSalesPersons() {
                 try {
@@ -775,83 +596,14 @@
                 const branch = this.branches.find(b => b.id === branchId);
                 return branch ? branch.name : '';
             },
-            // CAMPAIGNS
-            async loadCampaigns() {
-                try {
-                    const res = await axios.get('/campaign');
-                    this.campaigns = res.data;
-                } catch (error) {
-                    this.addNotification('Error loading campaigns: ' + (error.response?.data?.error || error.message), 'error');
-                }
-            },
-            closeNewCampaignModal() {
-                this.showNewCampaignModal = false;
-                this.newCampaign = { name: '', description: '', type: '', branch_ids: [] };
-            },
-            async createCampaign() {
-                if (!this.newCampaign.name || !this.newCampaign.type || !this.newCampaign.branch_ids.length) {
-                    this.addNotification('Name, type, and at least one branch are required', 'error');
-                    return;
-                }
-                try {
-                    await axios.post('/campaign', this.newCampaign);
-                    this.closeNewCampaignModal();
-                    this.editingCampaign = null;
-                    this.loadCampaigns();
-                    this.addNotification('Campaign created successfully');
-                } catch (error) {
-                    this.addNotification(error.response?.data?.error || 'Error creating campaign', 'error');
-                }
-            },
-            async deleteCampaign(id) {
-                if (!confirm('¿Estás seguro que deseas borrar esta campaña?')) return;
-                try {
-                    await axios.delete(`/campaign/${id}`);
-                    this.loadCampaigns();
-                    this.addNotification('Campaign deleted successfully');
-                } catch (error) {
-                    this.addNotification(error.response?.data?.error || 'Error deleting campaign', 'error');
-                }
-            },
-            editCampaign(campaign) {
-                this.editingCampaign = {
-                    ...campaign,
-                    type: campaign.type_id || campaign.type,
-                    branch_ids: Array.isArray(campaign.branch_ids) ? [...campaign.branch_ids] : []
-                };
-            },
-            async updateCampaign() {
-                if (!this.editingCampaign.name || !this.editingCampaign.type || !this.editingCampaign.branch_ids.length) {
-                    this.addNotification('Name, type, and at least one branch are required', 'error');
-                    return;
-                }
-                try {
-                    await axios.put(`/campaign/${this.editingCampaign.id}`, {
-                        name: this.editingCampaign.name,
-                        description: this.editingCampaign.description,
-                        type: this.editingCampaign.type,
-                        branch_ids: this.editingCampaign.branch_ids
-                    });
-                    this.editingCampaign = null;
-                    this.loadCampaigns();
-                    this.addNotification('Campaign updated successfully');
-                } catch (error) {
-                    this.addNotification(error.response?.data?.error || 'Error updating campaign', 'error');
-                }
-            },
-            cancelEditCampaign() {
-                this.editingCampaign = null;
-            },
             // Load all on mount
             loadAll() {
                 this.loadTags();
                 this.loadStatuses();
                 this.loadBranches();
-                this.loadCampaignTypes();
                 this.loadSalesPersons();
                 this.loadConditions();
                 this.loadSources();
-                this.loadCampaigns();
             },
             async loadProposalStatuses() {
                 try {
@@ -897,8 +649,64 @@
                 }
             },
             cancelEditProposalStatus() { this.editingProposalStatus = null; },
+            
+            // Initialize authentication
+            initializeAuth() {
+                const token = localStorage.getItem('accessToken');
+                const user = localStorage.getItem('user');
+                
+                if (!token || !user) {
+                    // No valid authentication, redirect to login
+                    console.warn('No authentication found, redirecting to login');
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                // Set up axios defaults with authorization header
+                axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+                axios.defaults.withCredentials = true;
+                
+                // Set up response interceptor to handle token expiration
+                axios.interceptors.response.use(
+                    response => response,
+                    async error => {
+                        if (error.response?.status === 401) {
+                            console.warn('Token expired or invalid, attempting refresh...');
+                            
+                            try {
+                                // Try to refresh the token
+                                const refreshResponse = await axios.post('/api/auth/refresh-token');
+                                const newToken = refreshResponse.data.accessToken;
+                                
+                                // Update stored token
+                                localStorage.setItem('accessToken', newToken);
+                                axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+                                
+                                // Retry the original request
+                                error.config.headers['Authorization'] = `Bearer ${newToken}`;
+                                return axios.request(error.config);
+                                
+                            } catch (refreshError) {
+                                console.error('Token refresh failed:', refreshError);
+                                
+                                // Clear auth data and redirect to login
+                                localStorage.removeItem('accessToken');
+                                localStorage.removeItem('user');
+                                window.location.href = '/login';
+                                return Promise.reject(refreshError);
+                            }
+                        }
+                        return Promise.reject(error);
+                    }
+                );
+                
+                console.log('✅ Authentication initialized');
+            }
         },
         mounted() {
+            // Set up authentication for axios
+            this.initializeAuth();
+            
             this.loadAll();
             this.loadProposalStatuses();
         }

@@ -1,0 +1,253 @@
+<%# 
+  Notifications Component - Toast notification system
+  
+  Description: This component displays toast notifications for success, error, 
+  warning, and info messages. It includes animations and auto-dismiss functionality.
+  
+  Parameters:
+  - position: Position of notifications (default: "top-right")
+    Options: "top-right", "top-left", "bottom-right", "bottom-left", "top-center"
+  
+  Usage:
+  <%- include('components/notifications', { position: 'top-right' }) %>
+  
+  Vue.js Integration:
+  - Requires notifications array in Vue data
+  - Requires removeNotification method in Vue methods
+  - Requires addNotification method for adding new notifications
+%>
+
+<!-- Notifications Container -->
+<div class="fixed <%= typeof position !== 'undefined' ? getPositionClasses(position) : 'top-4 right-4' %> z-50">
+    <transition-group name="notification" tag="div">
+        <div v-for="notification in notifications" 
+             :key="notification.id"
+             :class="[
+                 'mb-2 p-4 rounded-lg shadow-lg max-w-md min-w-80',
+                 getNotificationClasses(notification.type),
+                 'transform transition-all duration-300 ease-in-out'
+             ]">
+            <div class="flex items-start justify-between">
+                <div class="flex items-start">
+                    <!-- Notification Icon -->
+                    <div class="flex-shrink-0 mr-3">
+                        <i :class="getNotificationIcon(notification.type)" class="text-lg"></i>
+                    </div>
+                    
+                    <!-- Notification Content -->
+                    <div class="flex-1">
+                        <h4 v-if="notification.title" class="font-semibold text-sm mb-1">
+                            {{ notification.title }}
+                        </h4>
+                        <p class="text-sm" :class="notification.title ? 'opacity-90' : ''">
+                            {{ notification.message }}
+                        </p>
+                        
+                        <!-- Additional Details -->
+                        <div v-if="notification.details" class="mt-2 text-xs opacity-75">
+                            {{ notification.details }}
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div v-if="notification.actions" class="mt-3 flex space-x-2">
+                            <button v-for="action in notification.actions"
+                                    :key="action.label"
+                                    @click="action.handler(notification)"
+                                    class="text-xs px-3 py-1 rounded border border-current hover:bg-white hover:bg-opacity-20 transition-colors">
+                                {{ action.label }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Close Button -->
+                <button @click="removeNotification(notification.id)" 
+                        class="flex-shrink-0 ml-4 text-current hover:opacity-75 transition-opacity">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Progress Bar for Auto-dismiss -->
+            <div v-if="notification.autoDismiss !== false" 
+                 class="mt-3 h-1 bg-black bg-opacity-20 rounded-full overflow-hidden">
+                <div class="h-full bg-white bg-opacity-50 rounded-full transition-all duration-100 ease-linear"
+                     :style="{ width: getProgressWidth(notification) + '%' }"></div>
+            </div>
+        </div>
+    </transition-group>
+</div>
+
+<script>
+// Notification utility functions (to be included in Vue component)
+const notificationMixin = {
+    data() {
+        return {
+            notifications: [],
+            notificationIdCounter: 0
+        }
+    },
+    
+    methods: {
+        /**
+         * Add a new notification
+         * @param {Object} notification - Notification object
+         * @param {string} notification.type - Type: 'success', 'error', 'warning', 'info'
+         * @param {string} notification.message - Main message
+         * @param {string} [notification.title] - Optional title
+         * @param {string} [notification.details] - Optional additional details
+         * @param {Array} [notification.actions] - Optional action buttons
+         * @param {boolean} [notification.autoDismiss=true] - Auto dismiss after timeout
+         * @param {number} [notification.timeout=5000] - Timeout in milliseconds
+         */
+        addNotification(notification) {
+            const id = ++this.notificationIdCounter;
+            const newNotification = {
+                id,
+                type: notification.type || 'info',
+                message: notification.message,
+                title: notification.title,
+                details: notification.details,
+                actions: notification.actions,
+                autoDismiss: notification.autoDismiss !== false,
+                timeout: notification.timeout || 5000,
+                createdAt: Date.now(),
+                progress: 100
+            };
+            
+            this.notifications.push(newNotification);
+            
+            // Auto dismiss
+            if (newNotification.autoDismiss) {
+                this.startNotificationTimer(newNotification);
+            }
+        },
+        
+        /**
+         * Remove a notification by ID
+         * @param {number} id - Notification ID
+         */
+        removeNotification(id) {
+            const index = this.notifications.findIndex(n => n.id === id);
+            if (index > -1) {
+                this.notifications.splice(index, 1);
+            }
+        },
+        
+        /**
+         * Start auto-dismiss timer for notification
+         * @param {Object} notification - Notification object
+         */
+        startNotificationTimer(notification) {
+            const startTime = Date.now();
+            const updateInterval = 50; // Update every 50ms for smooth progress
+            
+            const timer = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.max(0, 100 - (elapsed / notification.timeout) * 100);
+                
+                // Update progress
+                const notif = this.notifications.find(n => n.id === notification.id);
+                if (notif) {
+                    notif.progress = progress;
+                }
+                
+                // Remove when time is up
+                if (elapsed >= notification.timeout) {
+                    clearInterval(timer);
+                    this.removeNotification(notification.id);
+                }
+            }, updateInterval);
+        },
+        
+        /**
+         * Get CSS classes for notification type
+         * @param {string} type - Notification type
+         * @returns {string} CSS classes
+         */
+        getNotificationClasses(type) {
+            const classes = {
+                success: 'bg-green-500 text-white',
+                error: 'bg-red-500 text-white',
+                warning: 'bg-yellow-500 text-white',
+                info: 'bg-blue-500 text-white'
+            };
+            return classes[type] || classes.info;
+        },
+        
+        /**
+         * Get icon for notification type
+         * @param {string} type - Notification type
+         * @returns {string} Icon classes
+         */
+        getNotificationIcon(type) {
+            const icons = {
+                success: 'fas fa-check-circle',
+                error: 'fas fa-exclamation-circle',
+                warning: 'fas fa-exclamation-triangle',
+                info: 'fas fa-info-circle'
+            };
+            return icons[type] || icons.info;
+        },
+        
+        /**
+         * Get progress width for auto-dismiss
+         * @param {Object} notification - Notification object
+         * @returns {number} Progress percentage
+         */
+        getProgressWidth(notification) {
+            return notification.progress || 0;
+        },
+        
+        // Convenience methods for different notification types
+        showSuccess(message, options = {}) {
+            this.addNotification({ ...options, type: 'success', message });
+        },
+        
+        showError(message, options = {}) {
+            this.addNotification({ ...options, type: 'error', message });
+        },
+        
+        showWarning(message, options = {}) {
+            this.addNotification({ ...options, type: 'warning', message });
+        },
+        
+        showInfo(message, options = {}) {
+            this.addNotification({ ...options, type: 'info', message });
+        }
+    }
+};
+
+// Position utility function
+function getPositionClasses(position) {
+    const positions = {
+        'top-right': 'top-4 right-4',
+        'top-left': 'top-4 left-4',
+        'bottom-right': 'bottom-4 right-4',
+        'bottom-left': 'bottom-4 left-4',
+        'top-center': 'top-4 left-1/2 transform -translate-x-1/2'
+    };
+    return positions[position] || positions['top-right'];
+}
+</script>
+
+<style>
+/* Notification transition animations */
+.notification-enter-active,
+.notification-leave-active {
+    transition: all 0.3s ease;
+}
+
+.notification-enter-from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+}
+
+.notification-leave-to {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+}
+
+.notification-move {
+    transition: transform 0.3s ease;
+}
+</style> 

@@ -1,92 +1,56 @@
 const db = require('../config/database');
 
+// Helper function to calculate price after discount (matches frontend logic)
+const calculatePriceAfterDiscount = (finalAmount, tmAmount, subAmount = 0) => {
+    if (!finalAmount || !tmAmount || finalAmount <= 0 || tmAmount <= 0) {
+        return finalAmount || 0;
+    }
+
+    const final = parseFloat(finalAmount);
+    const tm = parseFloat(tmAmount);
+    const subCost = parseFloat(subAmount) || 0;
+    const trueTotalCost = tm + subCost;
+
+    // Calculate the "display/eligibility" multiplier
+    let displayMultiplier;
+    if (subCost > 0) {
+        const adjustedFinalForDisplayMultiplier = final - (subCost * 1.5);
+        displayMultiplier = tm > 0 ? adjustedFinalForDisplayMultiplier / tm : 0;
+    } else {
+        displayMultiplier = tm > 0 ? final / tm : 0;
+    }
+
+    const minPriceRule = 3200;
+    const minMultiplierRule = 2.0;
+    const maxDiscountPercentRule = 15;
+    let maxAllowedDiscount = 0;
+
+    if (displayMultiplier > minMultiplierRule) {
+        const discountCapByMinPrice = Math.max(0, final - minPriceRule);
+        let discountCapByMinMultiplier = Infinity;
+        if (trueTotalCost > 0) {
+            discountCapByMinMultiplier = Math.max(0, final - (minMultiplierRule * trueTotalCost));
+        } else {
+            discountCapByMinMultiplier = Math.max(0, final);
+        }
+        const discountCapByMaxPercent = final * (maxDiscountPercentRule / 100);
+        maxAllowedDiscount = Math.min(discountCapByMinPrice, discountCapByMinMultiplier, discountCapByMaxPercent);
+    }
+
+    let calculatedDiscountPercent = 0;
+    if (final > 0 && maxAllowedDiscount > 0) {
+        calculatedDiscountPercent = (maxAllowedDiscount / final) * 100;
+    }
+    
+    const roundedAppliedDiscountPercent = Math.round(calculatedDiscountPercent * 100) / 100;
+    const finalDiscountAmount = final * (roundedAppliedDiscountPercent / 100);
+    const finalDiscountedPrice = final - finalDiscountAmount;
+
+    return parseFloat(finalDiscountedPrice.toFixed(2));
+};
+
 const campaignController = {
-    // Get all campaigns
-    getAllCampaigns: async (req, res) => {
-        try {
-            // Get campaigns with type information
-            const result = await db.query(`
-                SELECT c.*, ct.id as type_id, ct.name as type_name
-                FROM leads_dashboard.campaign c
-                LEFT JOIN leads_dashboard.campaign_type ct ON c.campaign_type_id = ct.id
-                ORDER BY ct.name, c.created_at DESC
-            `);
-            
-            // Format data for frontend and group by type
-            const campaignsByType = {};
-            
-            result.rows.forEach(campaign => {
-                const typeName = campaign.type_name || 'no_opportunity';
-                if (!campaignsByType[typeName]) {
-                    campaignsByType[typeName] = [];
-                }
-                
-                campaignsByType[typeName].push({
-                    id: campaign.id,
-                    name: campaign.name,
-                    description: campaign.description || '',
-                    type: typeName,
-                    type_id: campaign.type_id,
-                    created_at: campaign.created_at,
-                    updated_at: campaign.updated_at
-                });
-            });
-            
-            res.json(campaignsByType);
-        } catch (error) {
-            console.error('Error getting campaigns:', error);
-            res.status(500).json({ error: error.message });
-        }
-    },
-
-    // Get campaign by ID
-    getCampaignById: async (req, res) => {
-        try {
-            const campaignId = parseInt(req.params.id);
-            const result = await db.query(`
-                SELECT c.*, ct.name as type_name
-                FROM leads_dashboard.campaign c
-                LEFT JOIN leads_dashboard.campaign_type ct ON c.campaign_type_id = ct.id
-                WHERE c.id = $1
-            `, [campaignId]);
-            
-            if (result.rows.length === 0) {
-                return res.status(404).json({ error: 'Campaign not found' });
-            }
-            
-            // Obtener las sucursales asociadas
-            const branchesResult = await db.query(`
-                SELECT b.id, b.name 
-                FROM leads_dashboard.branch b
-                JOIN leads_dashboard.campaign_branch cb ON b.id = cb.branch_id
-                WHERE cb.campaign_id = $1
-            `, [campaignId]);
-            
-            const campaign = {
-                ...result.rows[0],
-                type: result.rows[0].type_name || 'no_opportunity',
-                branches: branchesResult.rows
-            };
-            
-            res.json(campaign);
-        } catch (error) {
-            console.error('Error getting campaign by ID:', error);
-            res.status(500).json({ error: error.message });
-        }
-    },
-
-    // Get campaign types
-    getCampaignTypes: async (req, res) => {
-        try {
-            const result = await db.query('SELECT * FROM leads_dashboard.campaign_type ORDER BY name');
-            res.json(result.rows);
-        } catch (error) {
-            console.error('Error getting campaign types:', error);
-            res.status(500).json({ error: error.message });
-        }
-    },
-
-    // Get branches
+    // Get branches (still needed for lead filtering)
     getBranches: async (req, res) => {
         try {
             const result = await db.query(`
@@ -118,54 +82,7 @@ const campaignController = {
         }
     },
 
-    // Get leads for a campaign
-    getCampaignLeads: async (req, res) => {
-        try {
-            const campaignId = parseInt(req.params.id);
-            const result = await db.query(`
-                SELECT
-                  l.id,
-                  l.name,
-                  l.created_date,
-                  l.last_contacted,
-                  l.recovered,
-                  l.final_proposal_amount,
-                  l.campaign_id,
-                  l.branch_id,
-                  l.note,
-                  l.fued,
-                  l.lead_status_id,
-                  l.sales_person_id,
-                  l.source_id,
-                  l.proposal_status_id,
-                  ps.name AS proposal_status,
-                  c.first_name,
-                  c.last_name,
-                  c.email_address AS email_address,
-                  CONCAT(a.street, ', ', a.city, ', ', a.state, ', ', a.zip_code) AS address,
-                  sp.name AS sales_person,
-                  s.name AS source,
-                  array_remove(array_agg(t.name), NULL) AS tags
-                FROM leads_dashboard.lead l
-                LEFT JOIN leads_dashboard.customer c ON l.customer_id = c.id
-                LEFT JOIN leads_dashboard.address a ON c.address_id = a.id
-                LEFT JOIN leads_dashboard.sales_person sp ON l.sales_person_id = sp.id
-                LEFT JOIN leads_dashboard.source s ON l.source_id = s.id
-                LEFT JOIN leads_dashboard.proposal_status ps ON l.proposal_status_id = ps.id
-                LEFT JOIN leads_dashboard.lead_tag lt ON l.id = lt.lead_id
-                LEFT JOIN leads_dashboard.tag t ON lt.tag_id = t.id
-                WHERE l.campaign_id = $1
-                GROUP BY l.id, c.first_name, c.last_name, c.email_address, a.street, a.city, a.state, a.zip_code, sp.name, s.name, ps.name
-                ORDER BY l.created_at DESC
-            `, [campaignId]);
-            res.json(result.rows);
-        } catch (error) {
-            console.error('Error getting campaign leads:', error);
-            res.status(500).json({ error: error.message });
-        }
-    },
-
-    // Get lead by ID
+    // Get lead by ID (still needed)
     getLeadById: async (req, res) => {
         try {
             const leadId = parseInt(req.params.id);
@@ -180,70 +97,14 @@ const campaignController = {
         }
     },
 
-    // Create new campaign
-    createCampaign: async (req, res) => {
-        console.log('[CREATE CAMPAIGN] Entrando a createCampaign');
-        try {
-            const { name, description, type, branch_ids } = req.body;
-            console.log('[CREATE CAMPAIGN] Datos recibidos:', req.body);
-            // Validación
-            if (!name || name.trim() === '') {
-                console.log('[CREATE CAMPAIGN] Validación fallida: name requerido');
-                return res.status(400).json({ error: 'Campaign name is required' });
-            }
-            if (!type) {
-                console.log('[CREATE CAMPAIGN] Validación fallida: type requerido');
-                return res.status(400).json({ error: 'Campaign type is required' });
-            }
-            if (!Array.isArray(branch_ids) || branch_ids.length === 0) {
-                console.log('[CREATE CAMPAIGN] Validación fallida: branch_ids requerido');
-                return res.status(400).json({ error: 'At least one branch must be selected' });
-            }
-            // Insert campaign
-            const result = await db.query(
-                'INSERT INTO leads_dashboard.campaign (name, campaign_type_id, description) VALUES ($1, $2, $3) RETURNING *',
-                [name, type, description || '']
-            );
-            const campaign = result.rows[0];
-            console.log('[CREATE CAMPAIGN] Campaña insertada:', campaign);
-            // Insert campaign-branch associations
-            for (const branchId of branch_ids) {
-                await db.query(
-                    'INSERT INTO leads_dashboard.campaign_branch (campaign_id, branch_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-                    [campaign.id, branchId]
-                );
-                console.log(`[CREATE CAMPAIGN] Asociación campaña-branch insertada: campaign_id=${campaign.id}, branch_id=${branchId}`);
-            }
-            // Obtener el tipo para devolver datos completos
-            const typeResult = await db.query('SELECT name FROM leads_dashboard.campaign_type WHERE id = $1', [type]);
-            const typeName = typeResult.rows.length > 0 ? typeResult.rows[0].name : '';
-            // Formatear respuesta para el frontend
-            const formattedCampaign = {
-                id: campaign.id,
-                name: campaign.name,
-                description: campaign.description || '',
-                type: typeName || 'no_opportunity',
-                campaign_type_id: campaign.campaign_type_id,
-                branch_ids: branch_ids,
-                created_at: campaign.created_at,
-                updated_at: campaign.updated_at
-            };
-            console.log('[CREATE CAMPAIGN] Respuesta enviada:', formattedCampaign);
-            res.status(201).json(formattedCampaign);
-        } catch (error) {
-            console.error('[CREATE CAMPAIGN] Error:', error);
-            res.status(500).json({ error: error.message });
-        }
-    },
-
-    // Update lead
+    // Update lead (still needed)
     updateLead: async (req, res) => {
         try {
             const leadId = parseInt(req.params.id);
             const fields = [
                 'name', 'created_date', 'lead_status_id', 'last_contacted', 'sales_person_id', 'source_id',
                 'proposal_status_id', 'customer_id', 'note', 'condition_id', 'final_proposal_amount', 'recovered',
-                'branch_id', 'campaign_id'
+                'branch_id'
             ];
             const updates = [];
             const values = [];
@@ -271,7 +132,7 @@ const campaignController = {
         }
     },
 
-    // Delete lead
+    // Delete lead (still needed)
     deleteLead: async (req, res) => {
         try {
             const leadId = parseInt(req.params.id);
@@ -286,244 +147,742 @@ const campaignController = {
         }
     },
 
-    // Export campaign data
-    exportCampaign: async (req, res) => {
+    // Get available leads for campaign creation (matched leads only with filters)
+    getAvailableLeads: async (req, res) => {
+        console.log('[GET AVAILABLE LEADS] Request received with filters:', req.query);
         try {
-            const campaignId = parseInt(req.params.id);
-            const type = req.query.type || 'not_recovered';
+            const { 
+                branch_ids = [], 
+                salesperson_ids = [], 
+                status_ids = [], 
+                date_from, 
+                date_to,
+                matched_only = true 
+            } = req.query;
+
+            // Build WHERE conditions
+            let whereConditions = [];
+            let queryParams = [];
+            let paramCount = 0;
+
+            // Always require matched leads (synced with API) and proposal amount > 10
+            whereConditions.push(`COALESCE(l.matched, false) = true`);
+            whereConditions.push(`COALESCE(l.final_proposal_amount, 0) > 10`);
             
-            // Aquí iría la lógica para generar un archivo Excel/CSV
-            // Por ahora solo enviaremos un mensaje simple
-            res.send(`Export for campaign ${campaignId} (${type}) would be generated here`);
+            // Add business rule filters for follow-up viability:
+            // 1. Must have valid T&M and Final Proposal values for calculation
+            whereConditions.push(`COALESCE(l.proposal_tm, 0) > 0`);
+            whereConditions.push(`COALESCE(l.final_proposal_amount, 0) > 0`);
+
+            // Branch filter
+            if (branch_ids && branch_ids.length > 0) {
+                const branchArray = Array.isArray(branch_ids) ? branch_ids : [branch_ids];
+                paramCount++;
+                whereConditions.push(`l.branch_id = ANY($${paramCount})`);
+                queryParams.push(branchArray.map(id => parseInt(id)));
+            }
+
+            // Salesperson filter
+            if (salesperson_ids && salesperson_ids.length > 0) {
+                const salespersonArray = Array.isArray(salesperson_ids) ? salesperson_ids : [salesperson_ids];
+                paramCount++;
+                whereConditions.push(`l.sales_person_id = ANY($${paramCount})`);
+                queryParams.push(salespersonArray.map(id => parseInt(id)));
+            }
+
+            // Status filter
+            if (status_ids && status_ids.length > 0) {
+                const statusArray = Array.isArray(status_ids) ? status_ids : [status_ids];
+                paramCount++;
+                whereConditions.push(`l.lead_status_id = ANY($${paramCount})`);
+                queryParams.push(statusArray.map(id => parseInt(id)));
+            }
+
+            // Date range filter
+            if (date_from) {
+                paramCount++;
+                whereConditions.push(`l.created_date >= $${paramCount}`);
+                queryParams.push(date_from);
+            }
+
+            if (date_to) {
+                paramCount++;
+                whereConditions.push(`l.created_date <= $${paramCount}`);
+                queryParams.push(date_to);
+            }
+
+            const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+            // Main query - using WITH clause to calculate multiplier and discount, then filter
+            const query = `
+                WITH lead_calculations AS (
+                    SELECT 
+                        l.id,
+                        l.name,
+                        l.created_date,
+                        COALESCE(l.final_proposal_amount, 0) as final_proposal_amount,
+                        COALESCE(l.proposal_tm, 0) as proposal_tm,
+                        COALESCE(l.sub_contractor_price, 0) as sub_contractor_price,
+                        COALESCE(l.matched, false) as matched,
+                        COALESCE(ls.name, 'No Status') as status,
+                        COALESCE(sp.name, 'Unassigned') as salesperson,
+                        COALESCE(b.name, 'No Branch') as branch,
+                        CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, '')) as customer_name,
+                        CONCAT(COALESCE(a.street, ''), ', ', COALESCE(a.city, ''), ', ', COALESCE(a.state, '')) as address,
+                        COALESCE(s.name, 'Unknown Source') as source,
+                        COALESCE(
+                            (SELECT STRING_AGG(t.name, ', ') 
+                             FROM leads_dashboard.lead_tag lt 
+                             JOIN leads_dashboard.tag t ON lt.tag_id = t.id 
+                             WHERE lt.lead_id = l.id), 
+                            ''
+                        ) as tags,
+                        -- Calculate multiplier with new subcontractor logic
+                        CASE 
+                            WHEN COALESCE(l.sub_contractor_price, 0) > 0 THEN
+                                CASE 
+                                    WHEN COALESCE(l.proposal_tm, 0) > 0 THEN
+                                        (COALESCE(l.final_proposal_amount, 0) - (COALESCE(l.sub_contractor_price, 0) * 1.5)) / COALESCE(l.proposal_tm, 0)
+                                    ELSE 0
+                                END
+                            ELSE
+                                CASE 
+                                    WHEN COALESCE(l.proposal_tm, 0) > 0 THEN
+                                        COALESCE(l.final_proposal_amount, 0) / COALESCE(l.proposal_tm, 0)
+                                    ELSE 0
+                                END
+                        END as multiplier,
+                        -- Calculate discount percentage
+                        CASE 
+                            WHEN COALESCE(l.sub_contractor_price, 0) > 0 THEN
+                                CASE 
+                                    WHEN COALESCE(l.proposal_tm, 0) > 0 THEN
+                                        GREATEST(0, ROUND((1 - ((COALESCE(l.final_proposal_amount, 0) - (COALESCE(l.sub_contractor_price, 0) * 1.5)) / COALESCE(l.proposal_tm, 0)) / 3.0) * 100, 1))
+                                    ELSE 0
+                                END
+                            ELSE
+                                CASE 
+                                    WHEN COALESCE(l.proposal_tm, 0) > 0 THEN
+                                        GREATEST(0, ROUND((1 - (COALESCE(l.final_proposal_amount, 0) / COALESCE(l.proposal_tm, 0)) / 3.0) * 100, 1))
+                                    ELSE 0
+                                END
+                        END as discount_percentage
+                    FROM leads_dashboard.lead l
+                    LEFT JOIN leads_dashboard.lead_status ls ON l.lead_status_id = ls.id
+                    LEFT JOIN leads_dashboard.sales_person sp ON l.sales_person_id = sp.id
+                    LEFT JOIN leads_dashboard.customer c ON l.customer_id = c.id
+                    LEFT JOIN leads_dashboard.address a ON c.address_id = a.id
+                    LEFT JOIN leads_dashboard.source s ON l.source_id = s.id
+                    LEFT JOIN leads_dashboard.branch b ON l.branch_id = b.id
+                    ${whereClause}
+                )
+                SELECT *
+                FROM lead_calculations
+                WHERE multiplier >= 2.0 
+                AND discount_percentage > 0
+                ORDER BY created_date DESC
+            `;
+
+            console.log('[GET AVAILABLE LEADS] Query:', query);
+            console.log('[GET AVAILABLE LEADS] Params:', queryParams);
+
+            const result = await db.query(query, queryParams);
+            
+            console.log(`[GET AVAILABLE LEADS] Found ${result.rows.length} leads with multiplier >= 2 and discount > 0%`);
+            console.log(`[GET AVAILABLE LEADS] Filtered leads for follow-up viability`);
+            
+            res.json(result.rows);
+            
         } catch (error) {
-            console.error('Error exporting campaign:', error);
+            console.error('Error getting available leads:', error);
             res.status(500).json({ error: error.message });
         }
     },
 
-    // Upload leads for a campaign
-    uploadLeads: async (req, res) => {
-        const xlsx = require('xlsx');
+    // Create enhanced campaign with groups and lead assignments (REAL DATABASE IMPLEMENTATION)
+    createEnhancedCampaign: async (req, res) => {
+        console.log('[CREATE ENHANCED CAMPAIGN] Starting real implementation...');
         try {
-            const campaignId = parseInt(req.params.id);
-            if (!req.file) {
-                return res.status(400).json({ error: 'No file uploaded' });
+            const { 
+                group_name,
+                description,
+                selected_lead_ids = []
+            } = req.body;
+
+            console.log('[CREATE ENHANCED CAMPAIGN] Data received:', req.body);
+
+            // Validation
+            if (!group_name || group_name.trim() === '') {
+                return res.status(400).json({ error: 'Group name is required' });
             }
-            // Leer el archivo Excel (encabezados en la segunda fila, datos desde la tercera)
-            const workbook = xlsx.readFile(req.file.path);
-            const sheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[sheetName];
-            const rawRows = xlsx.utils.sheet_to_json(sheet, { defval: '', header: 1 });
-            if (rawRows.length < 3) {
-                return res.status(400).json({ error: 'El archivo no tiene suficientes filas de datos.' });
+            if (!Array.isArray(selected_lead_ids) || selected_lead_ids.length === 0) {
+                return res.status(400).json({ error: 'At least one lead must be selected' });
             }
-            const headers = rawRows[1];
-            const dataRows = rawRows.slice(2);
-            const rows = dataRows.map(row => {
-                const obj = {};
-                headers.forEach((header, idx) => {
-                    obj[header] = row[idx];
+
+            // Validate that all lead IDs exist and meet our criteria
+            const leadIds = selected_lead_ids.map(id => parseInt(id)).filter(id => !isNaN(id));
+            if (leadIds.length === 0) {
+                return res.status(400).json({ error: 'Invalid lead IDs provided' });
+            }
+
+            // Check if leads exist and meet criteria (matched=true, final_proposal_amount > 10)
+            const leadValidationResult = await db.query(`
+                WITH lead_calculations AS (
+                    SELECT 
+                        l.id, 
+                        l.name, 
+                        l.final_proposal_amount, 
+                        l.matched,
+                        COALESCE(l.proposal_tm, 0) as proposal_tm,
+                        COALESCE(l.sub_contractor_price, 0) as sub_contractor_price,
+                        -- Calculate multiplier with new subcontractor logic
+                        CASE 
+                            WHEN COALESCE(l.sub_contractor_price, 0) > 0 THEN
+                                CASE 
+                                    WHEN COALESCE(l.proposal_tm, 0) > 0 THEN
+                                        (COALESCE(l.final_proposal_amount, 0) - (COALESCE(l.sub_contractor_price, 0) * 1.5)) / COALESCE(l.proposal_tm, 0)
+                                    ELSE 0
+                                END
+                            ELSE
+                                CASE 
+                                    WHEN COALESCE(l.proposal_tm, 0) > 0 THEN
+                                        COALESCE(l.final_proposal_amount, 0) / COALESCE(l.proposal_tm, 0)
+                                    ELSE 0
+                                END
+                        END as multiplier,
+                        -- Calculate discount percentage
+                        CASE 
+                            WHEN COALESCE(l.sub_contractor_price, 0) > 0 THEN
+                                CASE 
+                                    WHEN COALESCE(l.proposal_tm, 0) > 0 THEN
+                                        GREATEST(0, ROUND((1 - ((COALESCE(l.final_proposal_amount, 0) - (COALESCE(l.sub_contractor_price, 0) * 1.5)) / COALESCE(l.proposal_tm, 0)) / 3.0) * 100, 1))
+                                    ELSE 0
+                                END
+                            ELSE
+                                CASE 
+                                    WHEN COALESCE(l.proposal_tm, 0) > 0 THEN
+                                        GREATEST(0, ROUND((1 - (COALESCE(l.final_proposal_amount, 0) / COALESCE(l.proposal_tm, 0)) / 3.0) * 100, 1))
+                                    ELSE 0
+                                END
+                        END as discount_percentage
+                    FROM leads_dashboard.lead l
+                    WHERE l.id = ANY($1) 
+                    AND COALESCE(l.matched, false) = true 
+                    AND COALESCE(l.final_proposal_amount, 0) > 10
+                    AND COALESCE(l.proposal_tm, 0) > 0
+                )
+                SELECT id, name, final_proposal_amount, matched, multiplier, discount_percentage
+                FROM lead_calculations
+                WHERE multiplier >= 2.0 
+                AND discount_percentage > 0
+            `, [leadIds]);
+
+            if (leadValidationResult.rows.length !== leadIds.length) {
+                const validIds = leadValidationResult.rows.map(row => row.id);
+                const invalidIds = leadIds.filter(id => !validIds.includes(id));
+                return res.status(400).json({ 
+                    error: `Some leads don't meet follow-up criteria (must have multiplier >= 2.0 and discount > 0%) or don't exist: ${invalidIds.join(', ')}` 
                 });
-                return obj;
-            });
-            // Función auxiliar para parsear fechas a YYYY-MM-DD
-            function parseToISODate(val) {
-                if (!val) return '';
-                if (typeof val === 'number') {
-                    const dateObj = xlsx.SSF.parse_date_code(val);
-                    if (dateObj) {
-                        const mm = String(dateObj.m).padStart(2, '0');
-                        const dd = String(dateObj.d).padStart(2, '0');
-                        return `${dateObj.y}-${mm}-${dd}`;
-                    }
-                }
-                if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
-                const match = val.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-                if (match) {
-                    const y = match[3];
-                    const m = match[1].padStart(2, '0');
-                    const d = match[2].padStart(2, '0');
-                    return `${y}-${m}-${d}`;
-                }
-                return val;
             }
-            // Obtener la primera branch de la campaña
-            let branchIdForLeads = null;
-            const branchRes = await db.query(
-                `SELECT cb.branch_id FROM leads_dashboard.campaign_branch cb WHERE cb.campaign_id = $1 ORDER BY cb.branch_id LIMIT 1`,
-                [campaignId]
-            );
-            if (branchRes.rows.length > 0) {
-                branchIdForLeads = branchRes.rows[0].branch_id;
-            }
-            // Iniciar transacción
-            await db.query('BEGIN');
-            let created = 0, duplicated = 0, errors = 0;
-            const duplicateEmails = [];
-            for (const row of rows) {
-                try {
-                    // 1. Procesar fechas
-                    let createdDate = parseToISODate(row['Created Date']);
-                    let lastContacted = row['Last Contacted'] || '';
-                    if (lastContacted) {
-                        const match = lastContacted.match(/^(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/);
-                        if (match) {
-                            lastContacted = match[1];
-                        } else {
-                            lastContacted = lastContacted.split(' ')[0];
-                        }
-                        lastContacted = parseToISODate(lastContacted);
-                    }
-                    // 2. Buscar/crear catálogos
-                    async function getOrCreate(table, name, extraFields = {}) {
-                        if (!name || name.trim() === '') {
-                            // Si es condition, devolver null
-                            if (table === 'condition') return null;
-                            // Para otros catálogos, usar un valor por defecto
-                            name = table === 'lead_status' ? 'New' :
-                                  table === 'proposal_status' ? 'Pending' :
-                                  table === 'source' ? 'Unknown' : 'Default';
-                        }
-                        let result = await db.query(`SELECT id FROM leads_dashboard.${table} WHERE LOWER(name) = LOWER($1)`, [name]);
-                        if (result.rows.length > 0) return result.rows[0].id;
-                        result = await db.query(
-                            `INSERT INTO leads_dashboard.${table} (name${Object.keys(extraFields).length ? ', ' + Object.keys(extraFields).join(', ') : ''}) VALUES ($1${Object.values(extraFields).length ? ', ' + Object.values(extraFields).map((_,i)=>`$${i+2}`).join(', ') : ''}) RETURNING id`,
-                            [name, ...Object.values(extraFields)]
-                        );
-                        return result.rows[0].id;
-                    }
-                    // Limpiar el valor de Condition
-                    const conditionValue = (row['Condition*'] || '').trim();
-                    const leadStatusId = await getOrCreate('lead_status', row['Lead Status']);
-                    const salesPersonId = await getOrCreate('sales_person', row['Salesperson']);
-                    const sourceId = await getOrCreate('source', row['Source']);
-                    const proposalStatusId = await getOrCreate('proposal_status', row['Proposal Status...']);
-                    const conditionId = await getOrCreate('condition', conditionValue);
 
-                    // Procesar final_proposal_amount con soporte para formato latino e inglés
-                    let finalProposalAmount = null;
-                    if (row['Final Proposal Amount*']) {
-                        let raw = row['Final Proposal Amount*'].toString().replace(/[^0-9.,-]/g, '').trim();
-                        let cleanAmount = raw;
-                        if (raw.includes(',') && !raw.includes('.')) {
-                            // Formato latino: 14.830,57
-                            cleanAmount = raw.replace(/\./g, '').replace(',', '.');
-                        } else if (raw.includes('.') && !raw.includes(',')) {
-                            // Formato inglés: 2002701.00
-                            cleanAmount = raw.replace(/,/g, '');
-                        } else if (raw.includes('.') && raw.includes(',')) {
-                            // Formato mixto: 1,234.56
-                            cleanAmount = raw.replace(/,/g, '');
-                        }
-                        const amount = parseFloat(cleanAmount);
-                        if (!isNaN(amount)) {
-                            finalProposalAmount = amount;
-                        }
+            // Start database transaction
+            await db.query('BEGIN');
+
+            try {
+                // 1. Create the group
+                const groupResult = await db.query(`
+                    INSERT INTO leads_dashboard.lead_group (name, description)
+                    VALUES ($1, $2)
+                    RETURNING id, name, description, created_at
+                `, [group_name.trim(), description || '']);
+
+                const group = groupResult.rows[0];
+                console.log('[CREATE ENHANCED CAMPAIGN] Group created:', group);
+
+                // 2. Assign leads to the group
+                for (const leadId of leadIds) {
+                    await db.query(`
+                        INSERT INTO leads_dashboard.lead_group_assignment (lead_id, group_id)
+                        VALUES ($1, $2)
+                        ON CONFLICT (lead_id, group_id) DO NOTHING
+                    `, [leadId, group.id]);
                     }
-                    // 3. Address
-                    let addressId = null;
-                    if (row['Street Address (Contact)'] || row['City (Contact)'] || row['State (Contact)'] || row['Zip (Contact)']) {
-                        const addressRes = await db.query(
-                            'INSERT INTO leads_dashboard.address (street, city, state, zip_code) VALUES ($1, $2, $3, $4) RETURNING id',
-                            [row['Street Address (Contact)'] || '', row['City (Contact)'] || '', row['State (Contact)'] || '', row['Zip (Contact)'] || '']
-                        );
-                        addressId = addressRes.rows[0].id;
-                    }
-                    // 4. Customer (buscar por nombre y apellido)
-                    let customerId = null;
-                    if (row['First Name'] && row['Last Name']) {
-                        let customerRes = await db.query(
-                            'SELECT id FROM leads_dashboard.customer WHERE LOWER(first_name) = LOWER($1) AND LOWER(last_name) = LOWER($2)',
-                            [row['First Name'], row['Last Name']]
-                        );
-                        if (customerRes.rows.length > 0) {
-                            customerId = customerRes.rows[0].id;
-                        } else {
-                            customerRes = await db.query(
-                                'INSERT INTO leads_dashboard.customer (first_name, last_name, email_address, cell_phone, phone, address_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-                                [row['First Name'], row['Last Name'], row['Email Address'] || '', row['Cell Phone'] || '', row['Phone'] || '', addressId]
-                            );
-                            customerId = customerRes.rows[0].id;
-                        }
-                    }
-                    // 5. Duplicado: mismo email de cliente
-                    if (row['Email Address']) {
-                        const dupRes = await db.query('SELECT l.id FROM leads_dashboard.lead l JOIN leads_dashboard.customer c ON l.customer_id = c.id WHERE LOWER(c.email_address) = LOWER($1)', [row['Email Address']]);
-                        if (dupRes.rows.length > 0) {
-                            duplicated++;
-                            duplicateEmails.push(row['Email Address']);
-                            continue;
-                        }
-                    }
-                    // 6. Crear lead
-                    const leadRes = await db.query(
-                        `INSERT INTO leads_dashboard.lead (
-                            name, created_date, lead_status_id, last_contacted, sales_person_id, source_id, proposal_status_id, customer_id, note, condition_id, final_proposal_amount, campaign_id, fued, branch_id
-                        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
-                        [
-                            row['Opportunity Title'] || '',
-                            createdDate,
-                            leadStatusId,
-                            lastContacted,
-                            salesPersonId,
-                            sourceId,
-                            proposalStatusId,
-                            customerId,
-                            row['Notes'] || '',
-                            conditionId,
-                            finalProposalAmount,
-                            campaignId,
-                            false,
-                            branchIdForLeads
-                        ]
-                    );
-                    const leadId = leadRes.rows[0].id;
-                    // 7. Tags (crear si no existen y asociar)
-                    if (row['Tags']) {
-                        const tags = row['Tags'].split(',').map(t => t.trim()).filter(Boolean);
-                        for (const tagName of tags) {
-                            const tagId = await getOrCreate('tag', tagName);
-                            await db.query('INSERT INTO leads_dashboard.lead_tag (lead_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [leadId, tagId]);
-                        }
-                    }
-                    created++;
-                } catch (err) {
-                    errors++;
-                    console.error('[UPLOAD LEADS] Error en fila:', err);
-                }
+
+                console.log(`[CREATE ENHANCED CAMPAIGN] Assigned ${leadIds.length} leads to group ${group.id}`);
+
+                // 3. Get the assigned leads data for response
+                const assignedLeadsResult = await db.query(`
+                    SELECT 
+                        l.id,
+                        l.name,
+                        l.final_proposal_amount,
+                        CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, '')) as customer_name,
+                        COALESCE(sp.name, 'Unassigned') as salesperson,
+                        COALESCE(b.name, 'No Branch') as branch
+                    FROM leads_dashboard.lead_group_assignment lga
+                    JOIN leads_dashboard.lead l ON lga.lead_id = l.id
+                    LEFT JOIN leads_dashboard.customer c ON l.customer_id = c.id
+                    LEFT JOIN leads_dashboard.sales_person sp ON l.sales_person_id = sp.id
+                    LEFT JOIN leads_dashboard.branch b ON l.branch_id = b.id
+                    WHERE lga.group_id = $1
+                    ORDER BY l.name
+                `, [group.id]);
+
+                // Commit transaction
+                await db.query('COMMIT');
+
+                // Response with real group data
+                const response = {
+                    id: group.id,
+                    name: group.name,
+                    description: group.description,
+                    type: 'lead_group',
+                    assigned_leads_count: assignedLeadsResult.rows.length,
+                    assigned_leads: assignedLeadsResult.rows,
+                    created_at: group.created_at,
+                    status: 'active'
+                };
+
+                console.log('[CREATE ENHANCED CAMPAIGN] Group created successfully:', response);
+                res.status(201).json(response);
+
+            } catch (error) {
+                // Rollback transaction on error
+                await db.query('ROLLBACK');
+                throw error;
             }
-            await db.query('COMMIT');
-            res.json({ message: `Importación finalizada. Leads creados: ${created}, duplicados: ${duplicated}, errores: ${errors}`, duplicateEmails });
+
         } catch (error) {
-            await db.query('ROLLBACK');
-            console.error('[UPLOAD LEADS] Error general:', error);
+            console.error('Error in createEnhancedCampaign:', error);
             res.status(500).json({ error: error.message });
         }
     },
 
-    // Delete campaign
-    deleteCampaign: async (req, res) => {
+    // Get all lead groups with their assigned leads
+    getAllGroups: async (req, res) => {
+        console.log('📊 [getAllGroups] Request received');
+        
         try {
-            const campaignId = parseInt(req.params.id);
-            
-            // First check if the campaign exists
-            const campaignResult = await db.query('SELECT id FROM leads_dashboard.campaign WHERE id = $1', [campaignId]);
-            if (campaignResult.rows.length === 0) {
-                return res.status(404).json({ error: 'Campaign not found' });
+            // Verify authentication
+            if (!req.user) {
+                console.log('❌ [getAllGroups] No user found in request');
+                return res.status(401).json({ error: 'Authentication required' });
             }
             
-            // Delete campaign-branch associations first
-            await db.query('DELETE FROM leads_dashboard.campaign_branch WHERE campaign_id = $1', [campaignId]);
+            console.log('🔍 [getAllGroups] Querying database for groups...');
             
-            // Delete the campaign
-            await db.query('DELETE FROM leads_dashboard.campaign WHERE id = $1', [campaignId]);
+            // Get all groups with lead counts and calculated after-discount amounts
+            const groupsResult = await db.query(`
+                SELECT 
+                    lg.id,
+                    lg.name,
+                    lg.description,
+                    lg.created_at,
+                    lg.updated_at,
+                    COUNT(lga.lead_id) as assigned_leads_count,
+                    COALESCE(SUM(
+                        CASE 
+                            WHEN l.final_proposal_amount IS NULL OR l.proposal_tm IS NULL 
+                                OR l.final_proposal_amount <= 0 OR l.proposal_tm <= 0 
+                            THEN 0
+                            ELSE l.final_proposal_amount
+                        END
+                    ), 0) as total_proposal_amount,
+                    COUNT(CASE WHEN l.recovered = true THEN 1 END) as recovered_leads_count,
+                    -- Get raw data for recovered leads to calculate discount in JavaScript
+                    JSON_AGG(
+                        CASE 
+                            WHEN l.recovered = true 
+                            THEN JSON_BUILD_OBJECT(
+                                'final_proposal_amount', l.final_proposal_amount,
+                                'proposal_tm', l.proposal_tm,
+                                'sub_contractor_price', l.sub_contractor_price
+                            )
+                            ELSE NULL
+                        END
+                    ) FILTER (WHERE l.recovered = true) as recovered_leads_data
+                FROM leads_dashboard.lead_group lg
+                LEFT JOIN leads_dashboard.lead_group_assignment lga ON lg.id = lga.group_id
+                LEFT JOIN leads_dashboard.lead l ON lga.lead_id = l.id
+                GROUP BY lg.id, lg.name, lg.description, lg.created_at, lg.updated_at
+                ORDER BY lg.created_at DESC
+            `);
+
+            console.log('✅ [getAllGroups] Query successful');
+            console.log('📊 Groups found:', groupsResult.rows.length);
+            
+            // Calculate recovered amounts using discount logic
+            const groupsWithRecoveredAmounts = groupsResult.rows.map(group => {
+                let recoveredAmount = 0;
+                
+                if (group.recovered_leads_data && Array.isArray(group.recovered_leads_data)) {
+                    recoveredAmount = group.recovered_leads_data.reduce((sum, leadData) => {
+                        if (leadData && leadData.final_proposal_amount && leadData.proposal_tm) {
+                            const priceAfterDiscount = calculatePriceAfterDiscount(
+                                leadData.final_proposal_amount,
+                                leadData.proposal_tm,
+                                leadData.sub_contractor_price
+                            );
+                            return sum + priceAfterDiscount;
+                        }
+                        return sum;
+                    }, 0);
+                }
+                
+                return {
+                    ...group,
+                    recovered_amount: Math.round(recoveredAmount * 100) / 100, // Round to 2 decimals
+                    recovered_leads_data: undefined // Remove raw data from response
+                };
+            });
+            
+            if (groupsWithRecoveredAmounts.length > 0) {
+                console.log('📊 First group:', {
+                    id: groupsWithRecoveredAmounts[0].id,
+                    name: groupsWithRecoveredAmounts[0].name,
+                    leads: groupsWithRecoveredAmounts[0].assigned_leads_count,
+                    recovered_amount: groupsWithRecoveredAmounts[0].recovered_amount
+                });
+            }
+
+            res.json(groupsWithRecoveredAmounts);
+        } catch (error) {
+            console.error('❌ [getAllGroups] Error:', error);
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // Get group by ID with assigned leads
+    getGroupById: async (req, res) => {
+        try {
+            const groupId = parseInt(req.params.id);
+            
+            // Get group info
+            const groupResult = await db.query(`
+                SELECT id, name, description, created_at, updated_at
+                FROM leads_dashboard.lead_group 
+                WHERE id = $1
+            `, [groupId]);
+
+            if (groupResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Group not found' });
+            }
+            
+            // Get assigned leads
+            const leadsResult = await db.query(`
+                SELECT 
+                    l.id,
+                    l.name,
+                    l.created_date,
+                    l.inspection_date,
+                    l.final_proposal_amount,
+                    l.proposal_tm,
+                    l.sub_contractor_price,
+                    l.recovered,
+                    COALESCE(ls.name, 'No Status') as status,
+                    COALESCE(ls.name, 'No Status') as lead_status,
+                    COALESCE(sp.name, 'Unassigned') as salesperson,
+                    COALESCE(b.name, 'No Branch') as branch,
+                    COALESCE(b.name, 'No Branch') as branch_name,
+                    COALESCE(c.first_name, '') as first_name,
+                    COALESCE(c.last_name, '') as last_name,
+                    COALESCE(c.email_address, '') as email_address,
+                    COALESCE(c.phone, '') as customer_phone,
+                    COALESCE(c.cell_phone, '') as customer_cell_phone,
+                    CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, '')) as customer_name,
+                    COALESCE(a.street, '') as street,
+                    COALESCE(a.city, '') as city,
+                    COALESCE(a.state, '') as state,
+                    COALESCE(a.zip_code, '') as zip_code,
+                    CONCAT(COALESCE(a.street, ''), ', ', COALESCE(a.city, ''), ', ', COALESCE(a.state, '')) as address,
+                    COALESCE(s.name, 'Unknown Source') as source,
+                    COALESCE(
+                        (SELECT STRING_AGG(t.name, ', ') 
+                         FROM leads_dashboard.lead_tag lt 
+                         JOIN leads_dashboard.tag t ON lt.tag_id = t.id 
+                         WHERE lt.lead_id = l.id), 
+                        ''
+                    ) as tags,
+                    lga.created_at as assigned_at
+                FROM leads_dashboard.lead_group_assignment lga
+                JOIN leads_dashboard.lead l ON lga.lead_id = l.id
+                LEFT JOIN leads_dashboard.lead_status ls ON l.lead_status_id = ls.id
+                LEFT JOIN leads_dashboard.sales_person sp ON l.sales_person_id = sp.id
+                LEFT JOIN leads_dashboard.branch b ON l.branch_id = b.id
+                LEFT JOIN leads_dashboard.customer c ON l.customer_id = c.id
+                LEFT JOIN leads_dashboard.address a ON c.address_id = a.id
+                LEFT JOIN leads_dashboard.source s ON l.source_id = s.id
+                WHERE lga.group_id = $1
+                ORDER BY l.created_date DESC
+            `, [groupId]);
+
+            // Combine group info with leads
+            const group = {
+                ...groupResult.rows[0],
+                leads: leadsResult.rows
+            };
+
+            res.json(group);
+        } catch (error) {
+            console.error('Error getting group by ID:', error);
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // Delete group (and remove lead assignments)
+    deleteGroup: async (req, res) => {
+        try {
+            const groupId = parseInt(req.params.id);
+            
+            // Check if group exists
+            const groupResult = await db.query('SELECT id FROM leads_dashboard.lead_group WHERE id = $1', [groupId]);
+            if (groupResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Group not found' });
+            }
+            
+            // Delete group (CASCADE will remove assignments automatically)
+            await db.query('DELETE FROM leads_dashboard.lead_group WHERE id = $1', [groupId]);
             
             res.status(204).send();
         } catch (error) {
-            console.error('Error deleting campaign:', error);
+            console.error('Error deleting group:', error);
             res.status(500).json({ error: error.message });
         }
-    }
+    },
+
+    // Remove lead from group
+    removeLeadFromGroup: async (req, res) => {
+        try {
+            const groupId = parseInt(req.params.groupId);
+            const leadId = parseInt(req.params.leadId);
+            
+            console.log(`[REMOVE LEAD] Removing lead ${leadId} from group ${groupId}`);
+            
+            // Check if the assignment exists
+            const assignmentResult = await db.query(
+                'SELECT group_id, lead_id FROM leads_dashboard.lead_group_assignment WHERE group_id = $1 AND lead_id = $2',
+                [groupId, leadId]
+            );
+            
+            if (assignmentResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Lead not found in this group' });
+            }
+            
+            // Remove the assignment
+            await db.query(
+                'DELETE FROM leads_dashboard.lead_group_assignment WHERE group_id = $1 AND lead_id = $2',
+                [groupId, leadId]
+            );
+            
+            console.log(`✅ Lead ${leadId} removed from group ${groupId} successfully`);
+            
+            res.json({
+                success: true,
+                message: 'Lead removed from group successfully'
+            });
+            
+        } catch (error) {
+            console.error('Error removing lead from group:', error);
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // Export multiple groups to CSV for manual Mailchimp upload
+    exportGroupsToCsv: async (req, res) => {
+        try {
+            const { groupIds } = req.body;
+            
+            if (!groupIds || !Array.isArray(groupIds) || groupIds.length === 0) {
+                return res.status(400).json({ error: 'Group IDs array is required' });
+            }
+
+            console.log(`[CSV EXPORT] Exporting ${groupIds.length} groups to CSV`);
+
+            // Get all leads from the selected groups - NO EMAIL FILTERING
+            const leadsResult = await db.query(`
+                SELECT 
+                    l.id,
+                    COALESCE(c.email_address, '') as email_address,
+                    COALESCE(l.name, '') as lead_title,
+                    COALESCE(c.cell_phone, c.phone, '') as phone_number,
+                    COALESCE(a.zip_code, '') as zip_code,
+                    lg.name as group_name
+                FROM leads_dashboard.lead_group_assignment lga
+                JOIN leads_dashboard.lead l ON lga.lead_id = l.id
+                JOIN leads_dashboard.lead_group lg ON lga.group_id = lg.id
+                LEFT JOIN leads_dashboard.customer c ON l.customer_id = c.id
+                LEFT JOIN leads_dashboard.address a ON c.address_id = a.id
+                WHERE lga.group_id = ANY($1)
+                ORDER BY group_name, lead_title
+            `, [groupIds]);
+
+            console.log(`[CSV EXPORT] Found ${leadsResult.rows.length} total leads (including those without email)`);
+
+            if (leadsResult.rows.length === 0) {
+                return res.status(400).json({ 
+                    error: 'No leads found in selected groups' 
+                });
+            }
+
+            // Generate CSV content
+            const csvHeaders = ['Email', 'Lead Title', 'Phone Number', 'ZIP Code', 'Group Name'];
+            const csvRows = leadsResult.rows.map(lead => [
+                lead.email_address || '',
+                lead.lead_title || '',
+                lead.phone_number || '',
+                lead.zip_code || '',
+                lead.group_name || ''
+            ]);
+
+            // Convert to CSV format
+            const csvContent = [
+                csvHeaders.join(','),
+                ...csvRows.map(row => 
+                    row.map(field => {
+                        // Escape fields containing commas, quotes, or newlines
+                        if (typeof field === 'string' && (field.includes(',') || field.includes('"') || field.includes('\n'))) {
+                            return `"${field.replace(/"/g, '""')}"`;
+                        }
+                        return field;
+                    }).join(',')
+                )
+            ].join('\n');
+
+            // Set headers for file download
+            const filename = `mailchimp_export_${new Date().toISOString().slice(0, 10)}.csv`;
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            res.setHeader('Content-Length', Buffer.byteLength(csvContent));
+
+            console.log(`[CSV EXPORT] Sending CSV file with ${leadsResult.rows.length} leads`);
+            res.send(csvContent);
+
+        } catch (error) {
+            console.error('Error exporting groups to CSV:', error);
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // Toggle lead recovered status
+    toggleLeadRecoveredStatus: async (req, res) => {
+        try {
+            const leadId = parseInt(req.params.leadId);
+            const { recovered } = req.body;
+            
+            if (typeof recovered !== 'boolean') {
+                return res.status(400).json({ error: 'recovered field must be a boolean value' });
+            }
+            
+            // Update the lead's recovered status
+            const result = await db.query(`
+                UPDATE leads_dashboard.lead 
+                SET recovered = $1, updated_at = NOW()
+                WHERE id = $2
+                RETURNING id, recovered, final_proposal_amount
+            `, [recovered, leadId]);
+            
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Lead not found' });
+            }
+            
+            const updatedLead = result.rows[0];
+            console.log(`Lead ${leadId} recovered status updated to: ${recovered}`);
+            
+            res.json({
+                success: true,
+                leadId: updatedLead.id,
+                recovered: updatedLead.recovered,
+                final_proposal_amount: updatedLead.final_proposal_amount,
+                message: `Lead marked as ${recovered ? 'recovered' : 'not recovered'}`
+            });
+            
+        } catch (error) {
+            console.error('Error toggling lead recovered status:', error);
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // Toggle lead texted status
+    toggleLeadTextedStatus: async (req, res) => {
+        try {
+            const leadId = parseInt(req.params.leadId);
+            const { texted } = req.body;
+            
+            if (typeof texted !== 'boolean') {
+                return res.status(400).json({ error: 'texted field must be a boolean value' });
+            }
+            
+            // Update the lead's texted status
+            const result = await db.query(`
+                UPDATE leads_dashboard.lead 
+                SET texted = $1, updated_at = NOW()
+                WHERE id = $2
+                RETURNING id, texted, name
+            `, [texted, leadId]);
+            
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Lead not found' });
+            }
+            
+            const updatedLead = result.rows[0];
+            console.log(`Lead ${leadId} texted status updated to: ${texted}`);
+            
+            res.json({
+                success: true,
+                leadId: updatedLead.id,
+                texted: updatedLead.texted,
+                name: updatedLead.name,
+                message: `Lead marked as ${texted ? 'texted' : 'not texted'}`
+            });
+            
+        } catch (error) {
+            console.error('Error toggling lead texted status:', error);
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // Get group leads
+    getGroupLeads: async (req, res) => {
+        try {
+            const groupId = parseInt(req.params.id);
+            const query = `
+                SELECT 
+                    l.*,
+                    COALESCE(ls.name, 'No Status') as status,
+                    COALESCE(sp.name, 'Unassigned') as salesperson,
+                    b.name as branch_name,
+                    CONCAT(c.first_name, ' ', c.last_name) as customer_name,
+                    c.email_address,
+                    c.phone as customer_phone,
+                    CONCAT(a.street, ', ', a.city, ', ', a.state, ' ', a.zip_code) as full_address,
+                    COALESCE(l.texted, false) as texted,
+                    COALESCE(
+                        (SELECT STRING_AGG(t.name, ', ') 
+                         FROM leads_dashboard.lead_tag lt 
+                         JOIN leads_dashboard.tag t ON lt.tag_id = t.id 
+                         WHERE lt.lead_id = l.id), 
+                        'No tags'
+                    ) as tags
+                FROM leads_dashboard.lead l
+                LEFT JOIN leads_dashboard.lead_status ls ON l.lead_status_id = ls.id
+                LEFT JOIN leads_dashboard.sales_person sp ON l.sales_person_id = sp.id
+                LEFT JOIN leads_dashboard.branch b ON l.branch_id = b.id
+                LEFT JOIN leads_dashboard.customer c ON l.customer_id = c.id
+                LEFT JOIN leads_dashboard.address a ON c.address_id = a.id
+                WHERE l.id IN (
+                    SELECT lead_id 
+                    FROM leads_dashboard.lead_group_assignment 
+                    WHERE group_id = $1
+                )
+                ORDER BY l.created_date DESC`;
+            
+            const result = await db.query(query, [groupId]);
+            res.json(result.rows);
+        } catch (error) {
+            console.error('Error getting group leads:', error);
+            res.status(500).json({ error: error.message });
+        }
+    },
 };
 
 module.exports = campaignController; 

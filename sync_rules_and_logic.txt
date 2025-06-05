@@ -1,0 +1,74 @@
+## Lead Synchronization Rules (fetch_leads.js)
+
+This document outlines the rules for updating the local PostgreSQL database based on leads fetched from the Attic API.
+
+**Database Schema Involved:**
+
+*   `lead_status` table:
+    *   `id = 1`, `name = 'Sold'`
+    *   `id = 2`, `name = 'Lost'`
+    *   `id = 3`, `name = 'Open'`
+*   `lead` table columns for update:
+    *   `lead_status_id` (foreign key to `lead_status.id`)
+    *   `sub_contractor_price` (numeric(10,2)) - from API `sub_services_retail_cost`
+    *   `proposal_tm` (numeric(10,2)) - from API `true_cost`
+    *   `matched` (boolean)
+
+**API Status Strings:**
+
+*   For "Sold": `"Sold"`
+*   For "Lost": `"Lost"`
+*   Other statuses are considered "Open" for these rules.
+
+**Update Rules:**
+
+1.  **Matched Flag:** When an API lead is successfully matched to a DB lead, the DB lead's `matched` column is set to `true`. (This is handled by the matching logic before status updates).
+
+2.  **Financial Fields Update:**
+    *   **Condition:** An API lead is matched to a DB lead.
+    *   **Action:** Regardless of status changes, update the DB lead's:
+        *   `sub_contractor_price` with the value from the API lead's `sub_services_retail_cost`.
+        *   `proposal_tm` with the value from the API lead's `true_cost`.
+
+**Status Update Logic (evaluated in order of precedence):**
+
+**S1. Dominant Sold Status (New Primary Rule):**
+    *   **Condition:** The API lead's status is "Sold" **OR** the matched DB lead's current `lead_status_id` is `1` ("Sold").
+    *   **Action:** Update the DB lead's `lead_status_id` to `1` ("Sold").
+    *   *If this rule applies, no other status update rules below (S2, S3, S4) are considered for this lead.*
+
+**S2. API "Lost" Status:**
+    *   **Condition:** (The lead is *not* determined to be "Sold" by Rule S1) **AND** the API lead's status is "Lost".
+    *   **Action:** Update the DB lead's `lead_status_id` to `2` ("Lost").
+    *   *If this rule applies, no other status update rules below (S3, S4) are considered for this lead.*
+
+**S3. Old API "Open" Leads to "Lost":**
+    *   **Condition:** (The lead is *not* determined to be "Sold" by Rule S1, nor "Lost" by Rule S2) **AND** the API lead's status is *not* "Sold" AND *not* "Lost" (effectively "Open") **AND** the API lead's `createdAt` date is older than 30 days.
+    *   **Action:** Update the corresponding DB lead's `lead_status_id` to `2` ("Lost").
+    *   *If this rule applies, Rule S4 is not considered for this lead.*
+
+**S4. API "Open" Leads to "Open":**
+    *   **Condition:** (The lead is *not* determined to be "Sold" by Rule S1, nor "Lost" by Rules S2 or S3) **AND** the API lead's status is *not* "Sold" AND *not* "Lost" (effectively "Open").
+    *   **Action:** Update the corresponding DB lead's `lead_status_id` to `3` ("Open").
+
+---
+
+## Logic for DB "Sold" Leads with Different API Status
+
+This section describes what happens to a lead that is already marked as "Sold" (`lead_status_id = 1`) in the local database when a matched API lead has a different status, based on the **revised rules above (especially Rule S1)**.
+
+**New Overarching Principle:** If a lead is "Sold" in the DB, it STAYS "Sold" in the DB, regardless of the API status. If the API says "Sold", the DB will be updated to "Sold" if it wasn't already.
+
+1.  **API Status: "Sold"** (DB status is "Sold")
+    *   **DB Action:** Remains "Sold" (as per Rule S1: DB is already "Sold"; API also says "Sold").
+
+2.  **API Status: "Lost"** (DB status is "Sold")
+    *   **DB Action:** Remains "Sold" (as per Rule S1: because the DB lead's current status is "Sold", this takes precedence).
+
+3.  **API Status: "Open" (Not "Sold" or "Lost")** (DB status is "Sold")
+    *   **DB Action:** Remains "Sold" (as per Rule S1: because the DB lead's current status is "Sold", this takes precedence).
+
+In all scenarios where the DB lead is initially "Sold", it will remain "Sold" due to the new dominant "Sold" logic in Rule S1.
+
+**General Note:**
+*   Financial fields (`sub_contractor_price`, `proposal_tm`) are always updated from the API upon a match, as per Rule 2 (Financial Fields Update), irrespective of status changes. 

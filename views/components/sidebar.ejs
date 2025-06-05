@@ -1,0 +1,316 @@
+<%# 
+  Sidebar Component - Navigation sidebar with collapsible functionality
+  
+  Description: This component provides a responsive sidebar with navigation items,
+  user profile section, and dark mode toggle. Supports collapsible state.
+  
+  Parameters:
+  - title: Application title (default: "Leads Dashboard")
+  - navigationItems: Array of navigation items
+  - currentPage: Current active page identifier
+  - showGroupsList: Boolean to show groups list (default: false)
+  
+  Usage:
+  <%- include('components/sidebar', { 
+    title: 'Dashboard',
+    navigationItems: navItems,
+    currentPage: 'dashboard',
+    showGroupsList: true
+  }) %>
+%>
+
+<!-- Sidebar -->
+<aside :class="[
+    'fixed top-0 left-0 h-screen bg-white dark:bg-gray-800 shadow-sm sidebar-transition z-30 transition-colors duration-200',
+    isSidebarCollapsed ? 'w-20' : 'w-64'
+]">
+    <!-- Header Section -->
+    <div class="h-16 border-b border-gray-100 dark:border-gray-700 flex items-center px-4 justify-between transition-colors duration-200">
+        <div class="flex items-center">
+            <button @click="toggleSidebar" 
+                    class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors">
+                <i class="fas" :class="isSidebarCollapsed ? 'fa-bars' : 'fa-times'"></i>
+            </button>
+            <h1 v-if="!isSidebarCollapsed" class="ml-4 text-lg font-semibold text-gray-800 dark:text-gray-100">
+                <%= typeof title !== 'undefined' ? title : 'Leads Dashboard' %>
+            </h1>
+        </div>
+        <button @click="toggleDarkMode" 
+                class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                :title="darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+            <i :class="darkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
+        </button>
+    </div>
+
+    <!-- Action Buttons Section -->
+    <% if (typeof actionButtons !== 'undefined' && Array.isArray(actionButtons)) { %>
+    <div class="p-4">
+        <% actionButtons.forEach(function(button) { %>
+        <% if (button.type === 'button') { %>
+        <button v-if="!isSidebarCollapsed" 
+                @click="<%= button.action %>" 
+                class="w-full <%= button.classes || 'bg-indigo-500 text-white hover:bg-indigo-600' %> px-4 py-2 rounded-md flex items-center justify-center transition-colors mb-2">
+            <i class="<%= button.icon %> mr-2"></i>
+            <%= button.label %>
+        </button>
+        <button v-else
+                @click="<%= button.action %>"
+                class="w-full <%= button.classes || 'bg-indigo-500 text-white hover:bg-indigo-600' %> p-2 rounded-md flex items-center justify-center transition-colors mb-2">
+            <i class="<%= button.icon %>"></i>
+        </button>
+        <% } else if (button.type === 'link') { %>
+        <a href="<%= button.href %>" v-if="!isSidebarCollapsed"
+           class="w-full <%= button.classes || 'bg-purple-500 text-white hover:bg-purple-600' %> px-4 py-2 rounded-md flex items-center justify-center transition-colors mt-2">
+            <i class="<%= button.icon %> mr-2"></i>
+            <%= button.label %>
+        </a>
+        <a href="<%= button.href %>" v-else
+           class="w-full <%= button.classes || 'bg-purple-500 text-white hover:bg-purple-600' %> p-2 rounded-md flex items-center justify-center transition-colors mt-2">
+            <i class="<%= button.icon %>"></i>
+        </a>
+        <% } %>
+        <% }); %>
+    </div>
+    <% } %>
+
+    <!-- Navigation Menu -->
+    <nav class="mt-4 custom-scrollbar" style="height: calc(100vh - 8rem);">
+        <!-- Groups List (if enabled) -->
+        <% if (typeof showGroupsList !== 'undefined' && showGroupsList) { %>
+        <div class="px-4 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase transition-colors duration-200" v-if="!isSidebarCollapsed">
+            Lead Groups
+        </div>
+        <ul>
+            <li v-for="group in groups" 
+                :key="group.id"
+                @click="selectGroup(group)"
+                class="px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                :class="{'bg-indigo-50 dark:bg-indigo-900': selectedGroup?.id === group.id}">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fas fa-users text-gray-400 dark:text-gray-500"></i>
+                        <span v-if="!isSidebarCollapsed" class="ml-3 text-gray-600 dark:text-gray-300">{{ group.name }}</span>
+                        <span v-else class="ml-3 text-gray-600 dark:text-gray-300 text-sm font-medium">{{ getGroupInitials(group.name) }}</span>
+                    </div>
+                    <div v-if="!isSidebarCollapsed" class="text-xs text-gray-500 dark:text-gray-400">
+                        {{ group.assigned_leads_count }}
+                    </div>
+                </div>
+            </li>
+        </ul>
+        <% } %>
+
+        <!-- Regular Navigation Items -->
+        <% if (typeof navigationItems !== 'undefined' && Array.isArray(navigationItems)) { %>
+        <div class="px-4 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase transition-colors duration-200" v-if="!isSidebarCollapsed">
+            Navigation
+        </div>
+        <ul>
+            <% navigationItems.forEach(function(item) { %>
+            <li>
+                <% if (item.type === 'link') { %>
+                <a href="<%= item.href %>" 
+                   class="flex items-center px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors <%= typeof currentPage !== 'undefined' && currentPage === item.id ? 'bg-indigo-50 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400' : '' %>">
+                    <i class="<%= item.icon %> text-gray-400 dark:text-gray-500"></i>
+                    <span v-if="!isSidebarCollapsed" class="ml-3"><%= item.label %></span>
+                </a>
+                <% } else if (item.type === 'button') { %>
+                <button @click="<%= item.action %>"
+                        class="w-full flex items-center px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left">
+                    <i class="<%= item.icon %> text-gray-400 dark:text-gray-500"></i>
+                    <span v-if="!isSidebarCollapsed" class="ml-3"><%= item.label %></span>
+                </button>
+                <% } %>
+            </li>
+            <% }); %>
+        </ul>
+        <% } %>
+        
+        <!-- Empty state for groups -->
+        <% if (typeof showGroupsList !== 'undefined' && showGroupsList) { %>
+        <div v-if="groups.length === 0" class="px-4 py-8 text-center">
+            <div class="text-gray-400 dark:text-gray-500 mb-2">
+                <i class="fas fa-users text-3xl"></i>
+            </div>
+            <p v-if="!isSidebarCollapsed" class="text-sm text-gray-500 dark:text-gray-400">No groups yet</p>
+        </div>
+        <% } %>
+    </nav>
+
+    <!-- User Profile Section -->
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100 dark:border-gray-700 transition-colors duration-200">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center min-w-0 flex-1">
+                <!-- User Avatar -->
+                <div class="flex-shrink-0">
+                    <img :src="userAvatar" 
+                         alt="User Avatar" 
+                         class="w-10 h-10 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600">
+                </div>
+                
+                <!-- User Info (only shown when expanded) -->
+                <div v-if="!isSidebarCollapsed" class="ml-3 min-w-0 flex-1">
+                    <p class="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
+                        {{ currentUser.fullName || currentUser.username || 'Loading...' }}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {{ currentUser.email || currentUser.roleName || '' }}
+                    </p>
+                    <div v-if="currentUser.roleName" class="mt-1">
+                        <span :class="getRoleBadgeClass(currentUser.roleName)" 
+                              class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium">
+                            {{ getRoleDisplayName(currentUser.roleName) }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Admin Panel Button -->
+            <div class="flex-shrink-0 ml-2">
+                <a href="/admin-panel" 
+                   class="bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 p-2 rounded-full hover:bg-indigo-500 hover:text-white flex items-center justify-center transition-colors" 
+                   :title="isSidebarCollapsed ? 'Admin Panel' : 'Go to Admin Panel'">
+                    <i class="fas fa-cog text-sm"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</aside>
+
+<script>
+// Sidebar utility functions (to be included in Vue component)
+const sidebarMixin = {
+    data() {
+        return {
+            isSidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+            darkMode: localStorage.getItem('darkMode') === 'true',
+            currentUser: {
+                username: '',
+                email: '',
+                fullName: '',
+                roleName: '',
+                roleDisplayName: '',
+                branchName: ''
+            }
+        }
+    },
+    
+    computed: {
+        userAvatar() {
+            const name = this.currentUser.fullName || this.currentUser.username || 'User';
+            const initial = name.charAt(0).toUpperCase();
+            return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366F1&color=fff&size=128`;
+        }
+    },
+    
+    mounted() {
+        // Apply dark mode on mount
+        if (this.darkMode) {
+            document.documentElement.classList.add('dark');
+        }
+        
+        // Load user data
+        this.loadUserData();
+        
+        // Handle responsive sidebar
+        this.handleResize();
+        window.addEventListener('resize', this.handleResize);
+    },
+    
+    beforeUnmount() {
+        window.removeEventListener('resize', this.handleResize);
+    },
+    
+    methods: {
+        /**
+         * Load user data from localStorage
+         */
+        loadUserData() {
+            try {
+                const userDataString = localStorage.getItem('user');
+                if (userDataString) {
+                    const userData = JSON.parse(userDataString);
+                    console.log('🔍 Raw user data from localStorage:', userData);
+                    
+                    // Handle the actual structure from login response
+                    const fullName = userData.firstName && userData.lastName 
+                        ? `${userData.firstName} ${userData.lastName}` 
+                        : userData.firstName || userData.lastName || '';
+                    
+                    this.currentUser = {
+                        username: userData.username || '',
+                        email: userData.email || '',
+                        fullName: fullName,
+                        roleName: userData.role?.name || userData.roleName || '',
+                        roleDisplayName: userData.role?.displayName || userData.roleDisplayName || '',
+                        branchName: userData.branch?.name || userData.branchName || ''
+                    };
+                    
+                    console.log('✅ Processed user data:', this.currentUser);
+                } else {
+                    console.warn('⚠️ No user data found in localStorage');
+                }
+            } catch (error) {
+                console.error('❌ Error loading user data:', error);
+            }
+        },
+        
+        /**
+         * Get role badge CSS class
+         */
+        getRoleBadgeClass(role) {
+            const roleClasses = {
+                'admin': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+                'manager': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+                'salesperson': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                'user': 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+            };
+            return roleClasses[role?.toLowerCase()] || roleClasses['user'];
+        },
+        
+        /**
+         * Get role display name
+         */
+        getRoleDisplayName(role) {
+            const roleNames = {
+                'admin': 'Administrator',
+                'manager': 'Manager', 
+                'salesperson': 'Sales Person',
+                'user': 'User'
+            };
+            return roleNames[role?.toLowerCase()] || role;
+        },
+        
+        /**
+         * Toggle sidebar collapsed state
+         */
+        toggleSidebar() {
+            this.isSidebarCollapsed = !this.isSidebarCollapsed;
+            localStorage.setItem('sidebarCollapsed', this.isSidebarCollapsed);
+        },
+        
+        /**
+         * Toggle dark mode
+         */
+        toggleDarkMode() {
+            this.darkMode = !this.darkMode;
+            localStorage.setItem('darkMode', this.darkMode);
+            
+            if (this.darkMode) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        },
+        
+        /**
+         * Handle responsive sidebar behavior
+         */
+        handleResize() {
+            if (window.innerWidth < 768) {
+                this.isSidebarCollapsed = true;
+            }
+        }
+    }
+}
+</script> 

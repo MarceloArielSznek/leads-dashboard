@@ -1,0 +1,181 @@
+<%# 
+  Head Component - Common HTML head section
+  
+  Description: This component contains all the common meta tags, stylesheets, 
+  and scripts that are used across multiple pages in the application.
+  
+  Parameters:
+  - title: Page title (default: "Leads Dashboard")
+  - description: Page description for SEO
+  - additionalStyles: Array of additional CSS files to include
+  - additionalScripts: Array of additional JS files to include
+  
+  Usage:
+  <%- include('components/head', { 
+    title: 'Dashboard', 
+    description: 'Manage your leads effectively',
+    additionalStyles: ['/css/custom.css'],
+    additionalScripts: ['/js/custom.js']
+  }) %>
+%>
+
+<head>
+    <!-- Basic Meta Tags -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Page Title -->
+    <title><%= typeof title !== 'undefined' ? title + ' - Leads Dashboard' : 'Leads Dashboard' %></title>
+    
+    <!-- SEO Meta Tags -->
+    <% if (typeof description !== 'undefined') { %>
+    <meta name="description" content="<%= description %>">
+    <% } %>
+    <meta name="robots" content="noindex, nofollow">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    
+    <!-- Core Stylesheets -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Font Awesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Core JavaScript Libraries -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    
+    <!-- Additional Stylesheets -->
+    <% if (typeof additionalStyles !== 'undefined' && Array.isArray(additionalStyles)) { %>
+        <% additionalStyles.forEach(function(style) { %>
+            <link rel="stylesheet" href="<%= style %>">
+        <% }); %>
+    <% } %>
+    
+    <!-- Common Styles -->
+    <style>
+        /* Sidebar Transitions */
+        .sidebar-transition {
+            transition: all 0.3s ease;
+        }
+        
+        .content-transition {
+            transition: margin-left 0.3s ease;
+        }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* Dark mode scrollbar */
+        .dark .custom-scrollbar::-webkit-scrollbar-track {
+            background: #374151;
+        }
+        
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #6b7280;
+        }
+        
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+        
+        /* Notification Animations */
+        .notification-enter-active,
+        .notification-leave-active {
+            transition: all 0.3s ease;
+        }
+        
+        .notification-enter-from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        
+        .notification-leave-to {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Form Styles */
+        .form-input {
+            @apply w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white;
+        }
+        
+        .form-label {
+            @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
+        }
+        
+        /* Button Styles */
+        .btn-primary {
+            @apply bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-md font-medium transition-colors duration-200;
+        }
+        
+        .btn-secondary {
+            @apply bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md font-medium transition-colors duration-200;
+        }
+        
+        .btn-success {
+            @apply bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md font-medium transition-colors duration-200;
+        }
+        
+        .btn-danger {
+            @apply bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md font-medium transition-colors duration-200;
+        }
+    </style>
+    
+    <!-- Additional Scripts -->
+    <% if (typeof additionalScripts !== 'undefined' && Array.isArray(additionalScripts)) { %>
+        <% additionalScripts.forEach(function(script) { %>
+            <script src="<%= script %>"></script>
+        <% }); %>
+    <% } %>
+</head> 

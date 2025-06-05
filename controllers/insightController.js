@@ -1,6 +1,6 @@
 const xlsx = require('xlsx');
 const db = require('../config/database');
-const { generateSQLFromQuestion, generateNaturalLanguageResponse } = require('../config/openai');
+const { generateSQLFromQuestion, generateNaturalLanguageResponse, businessIntelligence } = require('../config/openai');
 
 const insightController = {
     // Get all branches for the dropdown selection
@@ -25,6 +25,60 @@ const insightController = {
         }
     },
 
+    // Get business intelligence summary
+    getBusinessIntelligence: async (req, res) => {
+        try {
+            const summary = businessIntelligence.exportSummary();
+            const insights = businessIntelligence.getPerformanceInsights();
+            const recommendations = businessIntelligence.getBusinessRecommendations();
+            
+            res.json({
+                summary,
+                insights,
+                recommendations,
+                status: 'active',
+                totalMemoryItems: summary.businessCategories?.length || 0
+            });
+        } catch (error) {
+            console.error('Error getting business intelligence:', error);
+            res.status(500).json({ error: 'Error fetching business intelligence data' });
+        }
+    },
+
+    // Clear business intelligence memory
+    clearBusinessIntelligence: async (req, res) => {
+        try {
+            businessIntelligence.clearAllData();
+            res.json({ message: 'Business intelligence memory cleared successfully' });
+        } catch (error) {
+            console.error('Error clearing business intelligence:', error);
+            res.status(500).json({ error: 'Error clearing business intelligence data' });
+        }
+    },
+
+    // Get smart suggestions for questions
+    getSmartSuggestions: async (req, res) => {
+        try {
+            const { category } = req.query;
+            
+            // Get suggestions based on category or provide general ones
+            const suggestions = businessIntelligence.getFollowUpSuggestions(category || 'general_business', []);
+            
+            // Also get recent high-value questions as suggestions
+            const summary = businessIntelligence.exportSummary();
+            const recentHighValue = summary.insights || [];
+            
+            res.json({
+                suggestions,
+                recentHighValue: recentHighValue.slice(0, 3),
+                category: category || 'general'
+            });
+        } catch (error) {
+            console.error('Error getting smart suggestions:', error);
+            res.status(500).json({ error: 'Error fetching suggestions' });
+        }
+    },
+
     // Render the insights page
     getInsightsPage: async (req, res) => {
         try {
@@ -32,6 +86,112 @@ const insightController = {
         } catch (error) {
             console.error('Error rendering insights page:', error);
             res.status(500).render('error', { error: 'Failed to load insights page' });
+        }
+    },
+
+    // Render the recovered leads page
+    getRecoveredLeadsPage: async (req, res) => {
+        try {
+            res.render('recovered-leads');
+        } catch (error) {
+            console.error('Error rendering recovered leads page:', error);
+            res.status(500).render('error', { error: 'Failed to load recovered leads page' });
+        }
+    },
+
+    // Get all recovered leads from all groups with insights
+    getRecoveredLeads: async (req, res) => {
+        try {
+            const query = `
+                SELECT 
+                    l.id,
+                    l.name as opportunity_title,
+                    l.created_date,
+                    l.recovered,
+                    l.updated_at as recovered_date,
+                    COALESCE(ls.name, 'No Status') as lead_status,
+                    COALESCE(sp.name, 'Unassigned') as salesperson,
+                    l.inspection_date,
+                    l.sold_date,
+                    CASE 
+                        WHEN l.sold_date IS NOT NULL AND l.created_date IS NOT NULL 
+                        THEN l.sold_date - l.created_date 
+                        ELSE NULL 
+                    END as days_to_sign,
+                    COALESCE(l.final_proposal_amount, 0) as final_proposal_amount,
+                    COALESCE(l.proposal_tm, 0) as proposal_tm,
+                    COALESCE(l.sub_contractor_price, 0) as sub_contractor_price,
+                    COALESCE(l.matched, false) as matched,
+                    COALESCE(a.city, '') as city,
+                    COALESCE(a.state, '') as state,
+                    COALESCE(a.street, '') as street_address,
+                    COALESCE(a.zip_code, '') as zip_code,
+                    COALESCE(s.name, 'Unknown Source') as source,
+                    COALESCE(c.email_address, '') as email_address,
+                    COALESCE(c.first_name, '') as first_name,
+                    COALESCE(c.last_name, '') as last_name,
+                    COALESCE(c.phone, '') as phone,
+                    COALESCE(pt.name, 'Unknown Type') as property_type,
+                    l.branch_id,
+                    COALESCE(b.name, 'No Branch') as branch_name,
+                    lg.name as group_name,
+                    lg.id as group_id,
+                    COALESCE(
+                        (SELECT STRING_AGG(t.name, ', ') 
+                         FROM leads_dashboard.lead_tag lt 
+                         JOIN leads_dashboard.tag t ON lt.tag_id = t.id 
+                         WHERE lt.lead_id = l.id), 
+                        ''
+                    ) as tags
+                FROM leads_dashboard.lead l
+                INNER JOIN leads_dashboard.lead_group_assignment lga ON l.id = lga.lead_id
+                INNER JOIN leads_dashboard.lead_group lg ON lga.group_id = lg.id
+                LEFT JOIN leads_dashboard.lead_status ls ON l.lead_status_id = ls.id
+                LEFT JOIN leads_dashboard.sales_person sp ON l.sales_person_id = sp.id
+                LEFT JOIN leads_dashboard.customer c ON l.customer_id = c.id
+                LEFT JOIN leads_dashboard.address a ON c.address_id = a.id
+                LEFT JOIN leads_dashboard.source s ON l.source_id = s.id
+                LEFT JOIN leads_dashboard.property_type pt ON l.property_type_id = pt.id
+                LEFT JOIN leads_dashboard.branch b ON l.branch_id = b.id
+                WHERE l.recovered = true
+                ORDER BY l.updated_at DESC, l.created_date DESC
+            `;
+            
+            const result = await db.pool.query(query);
+            res.json(result.rows);
+        } catch (error) {
+            console.error('Error fetching recovered leads:', error);
+            res.status(500).json({ error: 'Error fetching recovered leads', details: error.message });
+        }
+    },
+
+    // Get total leads count across all groups for recovery rate calculation
+    getTotalLeadsCount: async (req, res) => {
+        try {
+            const query = `
+                SELECT 
+                    COUNT(DISTINCT l.id) as total_leads,
+                    COUNT(DISTINCT CASE WHEN l.recovered = true THEN l.id END) as recovered_leads_count
+                FROM leads_dashboard.lead l
+                INNER JOIN leads_dashboard.lead_group_assignment lga ON l.id = lga.lead_id
+                INNER JOIN leads_dashboard.lead_group lg ON lga.group_id = lg.id
+            `;
+            
+            const result = await db.pool.query(query);
+            const stats = result.rows[0];
+            
+            // Calculate recovery rate
+            const recoveryRate = stats.total_leads > 0 ? 
+                (parseFloat(stats.recovered_leads_count) / parseFloat(stats.total_leads)) * 100 : 0;
+                
+            res.json({
+                total_leads: parseInt(stats.total_leads),
+                recovered_leads_count: parseInt(stats.recovered_leads_count),
+                recovery_rate: Math.round(recoveryRate * 10) / 10 // Round to 1 decimal place
+            });
+        } catch (error) {
+            console.error('Error fetching total leads count:', error);
+            res.status(500).json({ error: 'Error fetching total leads count', details: error.message });
         }
     },
 
@@ -54,8 +214,7 @@ const insightController = {
                     END as days_to_sign,
                     COALESCE(l.final_proposal_amount, 0) as final_proposal_amount,
                     COALESCE(l.proposal_tm, 0) as total_estimated_tm,
-                    COALESCE(l.retail_cost, 0) as retail_cost,
-                    COALESCE(l.discount_provided, 0) as discount_provided,
+                    COALESCE(l.sub_contractor_price, 0) as sub_contractor_price,
                     COALESCE(l.matched, false) as matched,
                     COALESCE(a.city, '') as city,
                     COALESCE(a.state, '') as state,
@@ -88,14 +247,9 @@ const insightController = {
             `;
             
             const result = await db.pool.query(query);
-            console.log(`Query returned ${result.rows.length} leads`);
-            if (result.rows.length > 0) {
-                console.log('First lead sample:', JSON.stringify(result.rows[0], null, 2));
-            }
             res.json(result.rows);
         } catch (error) {
             console.error('Error fetching leads:', error);
-            console.error('Error details:', error.message);
             res.status(500).json({ error: 'Error fetching leads', details: error.message });
         }
     },
@@ -142,10 +296,49 @@ const insightController = {
         const results = {
             total: rows.length,
             success: 0,
-            errors: []
+            errors: [],
+            updated: 0,          // Track updated leads
+            created: 0,          // Track newly created leads
+            autoSoldCount: 0     // Track leads automatically converted to "Sold"
         };
 
         console.log('\n=== INICIANDO PROCESAMIENTO ===');
+
+        // Pre-fetch all lookup data to avoid repeated queries
+        console.log('📋 Pre-loading lookup data for performance...');
+        const lookupData = {
+            leadStatuses: new Map(),
+            salespeople: new Map(),
+            sources: new Map(),
+            proposalStatuses: new Map(),
+            conditions: new Map(),
+            propertyTypes: new Map(),
+            tags: new Map()
+        };
+
+        // Pre-load existing data to avoid repeated lookups
+        const existingLeadStatuses = await db.pool.query('SELECT id, LOWER(name) as name FROM leads_dashboard.lead_status');
+        existingLeadStatuses.rows.forEach(row => lookupData.leadStatuses.set(row.name, row.id));
+
+        const existingSalesspeople = await db.pool.query('SELECT id, LOWER(name) as name FROM leads_dashboard.sales_person');
+        existingSalesspeople.rows.forEach(row => lookupData.salespeople.set(row.name, row.id));
+
+        const existingSources = await db.pool.query('SELECT id, LOWER(name) as name FROM leads_dashboard.source');
+        existingSources.rows.forEach(row => lookupData.sources.set(row.name, row.id));
+
+        const existingProposalStatuses = await db.pool.query('SELECT id, LOWER(name) as name FROM leads_dashboard.proposal_status');
+        existingProposalStatuses.rows.forEach(row => lookupData.proposalStatuses.set(row.name, row.id));
+
+        const existingConditions = await db.pool.query('SELECT id, LOWER(name) as name FROM leads_dashboard.condition');
+        existingConditions.rows.forEach(row => lookupData.conditions.set(row.name, row.id));
+
+        const existingPropertyTypes = await db.pool.query('SELECT id, LOWER(name) as name FROM leads_dashboard.property_type');
+        existingPropertyTypes.rows.forEach(row => lookupData.propertyTypes.set(row.name, row.id));
+
+        const existingTags = await db.pool.query('SELECT id, LOWER(name) as name FROM leads_dashboard.tag');
+        existingTags.rows.forEach(row => lookupData.tags.set(row.name, row.id));
+
+        console.log('✅ Lookup data pre-loaded');
 
         for (const [index, row] of rows.entries()) {
             console.log(`\n--- Procesando fila ${index + 1}/${rows.length} ---`);
@@ -156,13 +349,17 @@ const insightController = {
                 'Opportunity Title', 'Opportunity', 'Lead Name', 'Name', 'Title', 'Job Title'
             ]);
             
-            const salespersonName = getColumnValue(row, [
+            const salespersonNameRaw = getColumnValue(row, [
                 'Salesperson', 'Sales Person', 'Salesman', 'Sales Rep', 'Rep', 'Agent'
             ]);
             
-            const sourceName = getColumnValue(row, [
+            const sourceNameRaw = getColumnValue(row, [
                 'Source', 'Lead Source', 'Origin', 'Referral Source'
             ]);
+            
+            // Clean salespeople and sources - take only the first value before comma
+            const salespersonName = salespersonNameRaw ? salespersonNameRaw.split(',')[0].trim() : '';
+            const sourceName = sourceNameRaw ? sourceNameRaw.split(',')[0].trim() : '';
             
             const tags = getColumnValue(row, [
                 'Tags', 'Tag', 'Job Type', 'Job Types', 'Categories', 'Category'
@@ -243,13 +440,36 @@ const insightController = {
 
             console.log('\n=== VALORES EXTRAÍDOS ===');
             console.log('Opportunity Title:', opportunityTitle);
-            console.log('Salesperson:', salespersonName);
-            console.log('Source:', sourceName);
-            console.log('Lead Status:', leadStatusName);
+            console.log('Salesperson (raw):', salespersonNameRaw);
+            console.log('Salesperson (cleaned):', salespersonName);
+            console.log('Source (raw):', sourceNameRaw);
+            console.log('Source (cleaned):', sourceName);
+            console.log('Lead Status (from Excel):', leadStatusName);
+            console.log('Sold Date (raw):', soldDateStr);
             console.log('Tags:', tags);
             console.log('Customer:', firstName, lastName);
             console.log('Email:', email);
             console.log('Phone:', phone);
+
+            // Add better validation before processing
+            
+            // Skip rows with missing critical data
+            if (!opportunityTitle && !firstName && !lastName) {
+                console.log(`⚠️ Skipping row ${index + 1}: Missing essential data`);
+                results.errors.push({
+                    row: index + 1,
+                    data: row,
+                    error: 'Missing essential data: no opportunity title or customer name',
+                    errorCode: 'VALIDATION_ERROR'
+                });
+                continue; // Skip this row
+            }
+            
+            // Validate proposal amount
+            const proposalAmount = parseFloat(finalProposalAmount) || 0;
+            if (proposalAmount < 0) {
+                console.log(`⚠️ Invalid proposal amount in row ${index + 1}: ${finalProposalAmount}`);
+            }
 
             // Usar una transacción individual para cada lead
             const client = await db.pool.connect();
@@ -257,167 +477,182 @@ const insightController = {
                 await client.query('BEGIN');
                 console.log('Iniciando transacción individual para fila', index + 1);
                 
-                // 1. Insertar dirección
-                console.log('\n1. Insertando dirección...');
-                const addressResult = await client.query(
-                    `INSERT INTO leads_dashboard.address 
-                    (street, city, state, zip_code) 
-                    VALUES ($1, $2, $3, $4) 
-                    RETURNING id`,
-                    [streetAddress, city, state, zipCode]
-                );
-                const addressId = addressResult.rows[0].id;
-                console.log('Dirección creada con ID:', addressId);
+                // FIRST: Check for duplicate leads BEFORE creating any new records
+                console.log('\n1. Checking for duplicate leads...');
+                const leadName = opportunityTitle || `Lead ${index + 1}`;
+                const proposalAmount = parseFloat(finalProposalAmount) || 0;
 
-                // 2. Insertar cliente
-                console.log('\n2. Insertando cliente...');
-                const customerResult = await client.query(
-                    `INSERT INTO leads_dashboard.customer 
-                    (address_id, first_name, last_name, email_address, phone) 
-                    VALUES ($1, $2, $3, $4, $5) 
-                    RETURNING id`,
-                    [addressId, firstName, lastName, email, phone]
-                );
-                const customerId = customerResult.rows[0].id;
-                console.log('Cliente creado con ID:', customerId);
+                // Check for duplicates using multiple criteria
+                const duplicateCheck = await client.query(`
+                    SELECT l.id, l.name, l.final_proposal_amount, l.customer_id,
+                           c.first_name, c.last_name, c.email_address, c.address_id
+                    FROM leads_dashboard.lead l
+                    JOIN leads_dashboard.customer c ON l.customer_id = c.id
+                    WHERE (
+                        -- Match by opportunity name + branch + proposal amount
+                        (LOWER(l.name) = LOWER($1) AND l.branch_id = $2 AND l.final_proposal_amount = $3)
+                        OR
+                        -- Match by customer email + branch (if email exists)
+                        ($4 != '' AND LOWER(c.email_address) = LOWER($4) AND l.branch_id = $2)
+                        OR
+                        -- Match by customer name + address + branch (exact match)
+                        (LOWER(c.first_name) = LOWER($5) AND LOWER(c.last_name) = LOWER($6) 
+                         AND EXISTS (
+                             SELECT 1 FROM leads_dashboard.address a 
+                             WHERE a.id = c.address_id 
+                             AND LOWER(a.street) = LOWER($7) 
+                             AND LOWER(a.city) = LOWER($8)
+                         ) AND l.branch_id = $2)
+                    )
+                    LIMIT 1
+                `, [
+                    leadName,           // $1
+                    branchId,          // $2  
+                    proposalAmount,    // $3
+                    email || '',       // $4
+                    firstName || '',   // $5
+                    lastName || '',    // $6
+                    streetAddress || '', // $7
+                    city || ''         // $8
+                ]);
 
-                // 3. Obtener o crear lead status
-                console.log('\n3. Procesando Lead Status...');
+                let addressId, customerId;
+                let isUpdate = false;
+                let leadId;
+
+                if (duplicateCheck.rows.length > 0) {
+                    // DUPLICATE FOUND - Use existing customer and address
+                    const existingLead = duplicateCheck.rows[0];
+                    leadId = existingLead.id;
+                    customerId = existingLead.customer_id;
+                    addressId = existingLead.address_id;
+                    isUpdate = true;
+                    
+                    console.log('🔄 DUPLICATE LEAD DETECTED - UPDATING EXISTING LEAD');
+                    console.log(`Using existing Lead ID: ${leadId}, Customer ID: ${customerId}, Address ID: ${addressId}`);
+                    console.log(`Customer: ${existingLead.first_name} ${existingLead.last_name} (${existingLead.email_address})`);
+
+                } else {
+                    // NO DUPLICATES FOUND - Create new address and customer
+                    console.log('✅ No duplicates found, creating new address and customer');
+                    
+                    // 2. Create new address
+                    console.log('\n2. Creating new address...');
+                    const addressResult = await client.query(
+                        `INSERT INTO leads_dashboard.address 
+                        (street, city, state, zip_code) 
+                        VALUES ($1, $2, $3, $4) 
+                        RETURNING id`,
+                        [streetAddress, city, state, zipCode]
+                    );
+                    addressId = addressResult.rows[0].id;
+                    console.log('Address created with ID:', addressId);
+
+                    // 3. Create new customer
+                    console.log('\n3. Creating new customer...');
+                    const customerResult = await client.query(
+                        `INSERT INTO leads_dashboard.customer 
+                        (address_id, first_name, last_name, email_address, phone) 
+                        VALUES ($1, $2, $3, $4, $5) 
+                        RETURNING id`,
+                        [addressId, firstName, lastName, email, phone]
+                    );
+                    customerId = customerResult.rows[0].id;
+                    console.log('Customer created with ID:', customerId);
+                }
+
+                // 4. Get or create lead status (using cache)
+                console.log('\n4. Processing Lead Status...');
                 const leadStatusNameFinal = (leadStatusName || 'New').trim();
+                const leadStatusKey = leadStatusNameFinal.toLowerCase();
                 let leadStatusId;
                 
-                // Primero intentar encontrar el lead status existente (case-insensitive)
-                const existingLeadStatus = await client.query(
-                    `SELECT id FROM leads_dashboard.lead_status WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-                    [leadStatusNameFinal]
-                );
-                
-                if (existingLeadStatus.rows.length > 0) {
-                    leadStatusId = existingLeadStatus.rows[0].id;
-                    console.log('Lead Status encontrado con ID:', leadStatusId, 'Nombre:', leadStatusNameFinal);
+                if (lookupData.leadStatuses.has(leadStatusKey)) {
+                    leadStatusId = lookupData.leadStatuses.get(leadStatusKey);
+                    console.log('Lead Status found in cache:', leadStatusId, 'Name:', leadStatusNameFinal);
                 } else {
-                    // Si no existe, crear uno nuevo con manejo de conflictos
-                    try {
-                        const leadStatusResult = await client.query(
-                            `INSERT INTO leads_dashboard.lead_status (name) 
-                            VALUES ($1) 
-                            RETURNING id`,
-                            [leadStatusNameFinal]
-                        );
-                        leadStatusId = leadStatusResult.rows[0].id;
-                        console.log('Lead Status creado con ID:', leadStatusId, 'Nombre:', leadStatusNameFinal);
-                    } catch (statusError) {
-                        // Si hay un error de duplicado, intentar obtener el existente
-                        if (statusError.code === '23505') { // unique_violation
-                            console.log('Lead Status ya existe, obteniendo ID existente...');
-                            const retryResult = await client.query(
-                                `SELECT id FROM leads_dashboard.lead_status WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-                                [leadStatusNameFinal]
-                            );
-                            if (retryResult.rows.length > 0) {
-                                leadStatusId = retryResult.rows[0].id;
-                                console.log('Lead Status encontrado en retry con ID:', leadStatusId, 'Nombre:', leadStatusNameFinal);
-                            } else {
-                                throw new Error(`No se pudo crear ni encontrar el lead status: ${leadStatusNameFinal}`);
-                            }
-                        } else {
-                            throw statusError;
-                        }
-                    }
+                    // Create new lead status
+                    const leadStatusResult = await client.query(
+                        `INSERT INTO leads_dashboard.lead_status (name) VALUES ($1) RETURNING id`,
+                        [leadStatusNameFinal]
+                    );
+                    leadStatusId = leadStatusResult.rows[0].id;
+                    lookupData.leadStatuses.set(leadStatusKey, leadStatusId);
+                    console.log('Lead Status created:', leadStatusId, 'Name:', leadStatusNameFinal);
                 }
 
-                // 4. Obtener o crear salesperson
-                console.log('\n4. Procesando Sales Person...');
-                let salesPersonId;
+                // 5. Get or create salesperson (using cache)
+                console.log('\n5. Processing Sales Person...');
                 const salesPersonNameFinal = (salespersonName || 'Unknown').trim();
+                const salesPersonKey = salesPersonNameFinal.toLowerCase();
+                let salesPersonId;
                 
-                // Primero intentar encontrar el salesperson existente (case-insensitive)
-                const existingSalesPerson = await client.query(
-                    `SELECT id FROM leads_dashboard.sales_person WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-                    [salesPersonNameFinal]
-                );
-                
-                if (existingSalesPerson.rows.length > 0) {
-                    salesPersonId = existingSalesPerson.rows[0].id;
-                    console.log('Sales Person encontrado con ID:', salesPersonId, 'Nombre:', salesPersonNameFinal);
+                if (lookupData.salespeople.has(salesPersonKey)) {
+                    salesPersonId = lookupData.salespeople.get(salesPersonKey);
+                    console.log('Sales Person found in cache:', salesPersonId, 'Name:', salesPersonNameFinal);
                 } else {
-                    // Si no existe, crear uno nuevo con manejo de conflictos
-                    try {
-                        const salesPersonResult = await client.query(
-                            `INSERT INTO leads_dashboard.sales_person (name, branch_id) 
-                            VALUES ($1, $2) 
-                            RETURNING id`,
-                            [salesPersonNameFinal, branchId]
-                        );
-                        salesPersonId = salesPersonResult.rows[0].id;
-                        console.log('Sales Person creado con ID:', salesPersonId, 'Nombre:', salesPersonNameFinal);
-                    } catch (salesPersonError) {
-                        // Si hay un error, intentar obtener el existente
-                        console.log('Error creando Sales Person, intentando obtener existente...');
-                        const retryResult = await client.query(
-                            `SELECT id FROM leads_dashboard.sales_person WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-                            [salesPersonNameFinal]
-                        );
-                        if (retryResult.rows.length > 0) {
-                            salesPersonId = retryResult.rows[0].id;
-                            console.log('Sales Person encontrado en retry con ID:', salesPersonId, 'Nombre:', salesPersonNameFinal);
-                        } else {
-                            throw new Error(`No se pudo crear ni encontrar el sales person: ${salesPersonNameFinal}`);
-                        }
-                    }
+                    // Create new salesperson
+                    const salesPersonResult = await client.query(
+                        `INSERT INTO leads_dashboard.sales_person (name, branch_id) VALUES ($1, $2) RETURNING id`,
+                        [salesPersonNameFinal, branchId]
+                    );
+                    salesPersonId = salesPersonResult.rows[0].id;
+                    lookupData.salespeople.set(salesPersonKey, salesPersonId);
+                    console.log('Sales Person created:', salesPersonId, 'Name:', salesPersonNameFinal);
                 }
 
-                // 5. Obtener o crear source
-                console.log('\n5. Procesando Source...');
+                // 6. Get or create source (using cache)
+                console.log('\n6. Processing Source...');
                 const sourceNameFinal = sourceName || 'Unknown';
-                const sourceResult = await client.query(
-                    `INSERT INTO leads_dashboard.source (name) 
-                    VALUES ($1) 
-                    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name 
-                    RETURNING id`,
-                    [sourceNameFinal]
-                );
-                const sourceId = sourceResult.rows[0].id;
-                console.log('Source ID:', sourceId, 'Nombre:', sourceNameFinal);
+                const sourceKey = sourceNameFinal.toLowerCase();
+                let sourceId;
+                
+                if (lookupData.sources.has(sourceKey)) {
+                    sourceId = lookupData.sources.get(sourceKey);
+                    console.log('Source found in cache:', sourceId, 'Name:', sourceNameFinal);
+                } else {
+                    const sourceResult = await client.query(
+                        `INSERT INTO leads_dashboard.source (name) VALUES ($1) RETURNING id`,
+                        [sourceNameFinal]
+                    );
+                    sourceId = sourceResult.rows[0].id;
+                    lookupData.sources.set(sourceKey, sourceId);
+                    console.log('Source created:', sourceId, 'Name:', sourceNameFinal);
+                }
 
-                // 6. Obtener o crear proposal status
-                console.log('\n6. Procesando Proposal Status...');
+                // 7-9. Get or create other lookup values (using cache)
                 const proposalStatusFinal = proposalStatus || 'Closed';
-                const proposalStatusResult = await client.query(
-                    `INSERT INTO leads_dashboard.proposal_status (name) 
-                    VALUES ($1) 
-                    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name 
-                    RETURNING id`,
-                    [proposalStatusFinal]
-                );
-                const proposalStatusId = proposalStatusResult.rows[0].id;
-                console.log('Proposal Status ID:', proposalStatusId, 'Nombre:', proposalStatusFinal);
+                const proposalStatusKey = proposalStatusFinal.toLowerCase();
+                let proposalStatusId;
+                if (lookupData.proposalStatuses.has(proposalStatusKey)) {
+                    proposalStatusId = lookupData.proposalStatuses.get(proposalStatusKey);
+                } else {
+                    const result = await client.query(`INSERT INTO leads_dashboard.proposal_status (name) VALUES ($1) RETURNING id`, [proposalStatusFinal]);
+                    proposalStatusId = result.rows[0].id;
+                    lookupData.proposalStatuses.set(proposalStatusKey, proposalStatusId);
+                }
 
-                // 7. Obtener o crear condition
-                console.log('\n7. Procesando Condition...');
                 const conditionFinal = condition || 'Normal';
-                const conditionResult = await client.query(
-                    `INSERT INTO leads_dashboard.condition (name) 
-                    VALUES ($1) 
-                    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name 
-                    RETURNING id`,
-                    [conditionFinal]
-                );
-                const conditionId = conditionResult.rows[0].id;
-                console.log('Condition ID:', conditionId, 'Nombre:', conditionFinal);
+                const conditionKey = conditionFinal.toLowerCase();
+                let conditionId;
+                if (lookupData.conditions.has(conditionKey)) {
+                    conditionId = lookupData.conditions.get(conditionKey);
+                } else {
+                    const result = await client.query(`INSERT INTO leads_dashboard.condition (name) VALUES ($1) RETURNING id`, [conditionFinal]);
+                    conditionId = result.rows[0].id;
+                    lookupData.conditions.set(conditionKey, conditionId);
+                }
 
-                // 8. Obtener o crear property type
-                console.log('\n8. Procesando Property Type...');
                 const propertyTypeFinal = propertyType || 'Unknown';
-                const propertyTypeResult = await client.query(
-                    `INSERT INTO leads_dashboard.property_type (name) 
-                    VALUES ($1) 
-                    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name 
-                    RETURNING id`,
-                    [propertyTypeFinal]
-                );
-                const propertyTypeId = propertyTypeResult.rows[0].id;
-                console.log('Property Type ID:', propertyTypeId, 'Nombre:', propertyTypeFinal);
+                const propertyTypeKey = propertyTypeFinal.toLowerCase();
+                let propertyTypeId;
+                if (lookupData.propertyTypes.has(propertyTypeKey)) {
+                    propertyTypeId = lookupData.propertyTypes.get(propertyTypeKey);
+                } else {
+                    const result = await client.query(`INSERT INTO leads_dashboard.property_type (name) VALUES ($1) RETURNING id`, [propertyTypeFinal]);
+                    propertyTypeId = result.rows[0].id;
+                    lookupData.propertyTypes.set(propertyTypeKey, propertyTypeId);
+                }
 
                 // 9. Parse dates
                 const parseDate = (dateStr) => {
@@ -450,53 +685,163 @@ const insightController = {
                 const inspectionDate = parseDate(inspectionDateStr);
                 const soldDate = parseDate(soldDateStr);
 
-                // 10. Insertar lead
-                console.log('\n10. Insertando Lead...');
-                const leadResult = await client.query(
-                    `INSERT INTO leads_dashboard.lead 
-                    (name, created_date, lead_status_id, sales_person_id, source_id, 
-                    proposal_status_id, customer_id, note, condition_id, property_type_id, final_proposal_amount, proposal_tm, 
-                    inspection_date, sold_date, branch_id) 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
-                    RETURNING id`,
-                    [
-                        opportunityTitle || `Lead ${index + 1}`,
-                        createdDate,
-                        leadStatusId,
-                        salesPersonId,
-                        sourceId,
-                        proposalStatusId,
-                        customerId,
-                        notes,
-                        conditionId,
-                        propertyTypeId,
-                        parseFloat(finalProposalAmount) || 0,
-                        parseFloat(totalEstimatedTM) || 0,
-                        inspectionDate,
-                        soldDate,
-                        branchId
-                    ]
-                );
-                const leadId = leadResult.rows[0].id;
-                console.log('Lead creado con ID:', leadId, 'Nombre:', opportunityTitle || `Lead ${index + 1}`);
+                // AUTO-SOLD LOGIC: If sold date exists, override status to "Sold"
+                let finalLeadStatusId = leadStatusId;
+                if (soldDate) {
+                    console.log('\n🎯 SOLD DATE DETECTED - Overriding status to "Sold"...');
+                    console.log('Sold Date:', soldDate);
+                    
+                    // Find or create "Sold" status
+                    const soldStatusResult = await client.query(
+                        `SELECT id FROM leads_dashboard.lead_status WHERE LOWER(name) = 'sold' LIMIT 1`
+                    );
+                    
+                    if (soldStatusResult.rows.length > 0) {
+                        finalLeadStatusId = soldStatusResult.rows[0].id;
+                        console.log('✅ Using existing "Sold" status ID:', finalLeadStatusId);
+                    } else {
+                        // Create "Sold" status if it doesn't exist
+                        const createSoldResult = await client.query(
+                            `INSERT INTO leads_dashboard.lead_status (name) VALUES ('Sold') RETURNING id`
+                        );
+                        finalLeadStatusId = createSoldResult.rows[0].id;
+                        console.log('✅ Created new "Sold" status ID:', finalLeadStatusId);
+                    }
+                    
+                    console.log(`🔄 Status changed from "${leadStatusNameFinal}" to "Sold" due to sold date`);
+                    results.autoSoldCount++;
+                }
 
-                // 11. Manejar tags
+                // Now handle the lead creation or update
+                if (isUpdate) {
+                    // UPDATE EXISTING LEAD
+                    console.log('\n10. Updating existing lead...');
+                    
+                    // Update the existing lead (Excel data always wins)
+                    await client.query(
+                        `UPDATE leads_dashboard.lead 
+                        SET name = $1,
+                            created_date = $2,
+                            lead_status_id = $3,
+                            sales_person_id = $4,
+                            source_id = $5,
+                            proposal_status_id = $6,
+                            note = $7,
+                            condition_id = $8,
+                            property_type_id = $9,
+                            final_proposal_amount = $10,
+                            proposal_tm = $11,
+                            inspection_date = $12,
+                            sold_date = $13,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $14`,
+                        [
+                            leadName,
+                            createdDate,
+                            finalLeadStatusId,
+                            salesPersonId,
+                            sourceId,
+                            proposalStatusId,
+                            notes,
+                            conditionId,
+                            propertyTypeId,
+                            proposalAmount,
+                            parseFloat(totalEstimatedTM) || 0,
+                            inspectionDate,
+                            soldDate,
+                            leadId
+                        ]
+                    );
+
+                    // Update customer information (Excel data always wins)
+                    await client.query(
+                        `UPDATE leads_dashboard.customer 
+                        SET first_name = $1,
+                            last_name = $2,
+                            email_address = $3,
+                            phone = $4
+                        WHERE id = $5`,
+                        [firstName, lastName, email, phone, customerId]
+                    );
+
+                    // Update address information (Excel data always wins)
+                    await client.query(
+                        `UPDATE leads_dashboard.address 
+                        SET street = $1,
+                            city = $2,
+                            state = $3,
+                            zip_code = $4
+                        WHERE id = $5`,
+                        [streetAddress, city, state, zipCode, addressId]
+                    );
+
+                    console.log('✅ Lead updated successfully');
+                    
+                } else {
+                    // CREATE NEW LEAD
+                    console.log('\n10. Creating new lead...');
+                    const leadResult = await client.query(
+                        `INSERT INTO leads_dashboard.lead 
+                        (name, created_date, lead_status_id, sales_person_id, source_id, 
+                        proposal_status_id, customer_id, note, condition_id, property_type_id, final_proposal_amount, proposal_tm, 
+                        inspection_date, sold_date, branch_id) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+                        RETURNING id`,
+                        [
+                            leadName,
+                            createdDate,
+                            finalLeadStatusId, // Use the final status (either original or "Sold")
+                            salesPersonId,
+                            sourceId,
+                            proposalStatusId,
+                            customerId,
+                            notes,
+                            conditionId,
+                            propertyTypeId,
+                            proposalAmount,
+                            parseFloat(totalEstimatedTM) || 0,
+                            inspectionDate,
+                            soldDate,
+                            branchId
+                        ]
+                    );
+                    leadId = leadResult.rows[0].id;
+                    console.log('Lead created with ID:', leadId, 'Name:', leadName);
+                }
+
+                // 11. Handle tags (Excel data always wins - replace all existing tags)
+                console.log('\n11. Processing Tags...');
+                
+                // First, remove all existing tags for this lead if it's an update
+                if (isUpdate) {
+                    await client.query(
+                        `DELETE FROM leads_dashboard.lead_tag WHERE lead_id = $1`,
+                        [leadId]
+                    );
+                    console.log('Removed existing tags for lead update');
+                }
+                
+                // Then add the new tags from Excel
                 if (tags) {
-                    console.log('\n11. Procesando Tags...');
                     const tagList = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
                     
                     for (const tagName of tagList) {
-                        // Crear o obtener tag
-                        const tagResult = await client.query(
-                            `INSERT INTO leads_dashboard.tag (name) 
-                            VALUES ($1) 
-                            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name 
-                            RETURNING id`,
-                            [tagName]
-                        );
-                        const tagId = tagResult.rows[0].id;
+                        // Create or get tag (using cache)
+                        const tagKey = tagName.toLowerCase();
+                        let tagId;
                         
-                        // Asociar tag con lead
+                        if (lookupData.tags.has(tagKey)) {
+                            tagId = lookupData.tags.get(tagKey);
+                        } else {
+                            const tagResult = await client.query(
+                                `INSERT INTO leads_dashboard.tag (name) VALUES ($1) RETURNING id`,
+                                [tagName]
+                            );
+                            tagId = tagResult.rows[0].id;
+                            lookupData.tags.set(tagKey, tagId);
+                        }
+                        
+                        // Associate tag with lead
                         await client.query(
                             `INSERT INTO leads_dashboard.lead_tag (lead_id, tag_id) 
                             VALUES ($1, $2) 
@@ -504,12 +849,20 @@ const insightController = {
                             [leadId, tagId]
                         );
                     }
-                    console.log('Tags procesados:', tagList);
+                    console.log('Tags processed:', tagList);
+                } else {
+                    console.log('No tags to add from Excel');
                 }
 
                 await client.query('COMMIT');
                 results.success++;
-                console.log(`✅ Fila ${index + 1} procesada exitosamente`);
+                if (isUpdate) {
+                    results.updated++;
+                    console.log(`✅ Fila ${index + 1} - Lead actualizado exitosamente (ID: ${leadId})`);
+                } else {
+                    results.created++;
+                    console.log(`✅ Fila ${index + 1} - Lead creado exitosamente (ID: ${leadId})`);
+                }
 
             } catch (error) {
                 await client.query('ROLLBACK');
@@ -545,13 +898,17 @@ const insightController = {
 
         console.log('\n=== PROCESAMIENTO COMPLETADO ===');
         console.log('📊 RESUMEN FINAL:');
-        console.log(`✅ Leads insertados exitosamente: ${results.success}`);
-        console.log(`❌ Leads que NO fueron insertados: ${results.errors.length}`);
+        console.log(`✅ Leads procesados exitosamente: ${results.success}`);
+        console.log(`🆕 Leads nuevos creados: ${results.created}`);
+        console.log(`🔄 Leads existentes actualizados: ${results.updated}`);
+        console.log(`❌ Errores de procesamiento: ${results.errors.length}`);
         console.log(`📈 Total procesados: ${results.total}`);
         console.log(`📊 Tasa de éxito: ${((results.success / results.total) * 100).toFixed(1)}%`);
+        console.log(`📈 Leads automáticamente convertidos a "Sold": ${results.autoSoldCount}`);
         
         if (results.errors.length > 0) {
-            console.log('\n🔍 PRIMEROS 5 ERRORES:');
+            console.log('\n🔍 DETALLES DE ERRORES:');
+            console.log(`\n⚠️ ERRORES DE PROCESAMIENTO (${results.errors.length}):`);
             results.errors.slice(0, 5).forEach((error, index) => {
                 console.log(`${index + 1}. Fila ${error.row}: ${error.error}`);
             });
@@ -563,7 +920,7 @@ const insightController = {
         res.json(results);
     },
 
-    // Handle AI chat queries with real GPT-4
+    // Handle AI chat queries with enhanced business intelligence
     handleAiChat: async (req, res) => {
         try {
             const { question } = req.body;
@@ -572,57 +929,216 @@ const insightController = {
                 return res.status(400).json({ error: 'Question is required' });
             }
 
-            console.log('AI Chat Question:', question);
+            console.log('🤖 Enhanced AI Chat Question:', question);
 
             // Check if OpenAI API key is configured
             if (!process.env.OPENAI_API_KEY) {
                 return res.json({
-                    answer: 'OpenAI API key is not configured. Please add your OPENAI_API_KEY to the environment variables.',
+                    answer: '🔑 OpenAI API key is not configured. Please add your OPENAI_API_KEY to the environment variables to enable AI capabilities.',
                     data: [],
-                    sql: null
+                    sql: null,
+                    suggestions: businessIntelligence.getFollowUpSuggestions('general_business', [])
                 });
             }
 
-            // Use GPT-4 to generate SQL from natural language
-            const sqlQuery = await generateSQLFromQuestion(question);
-            console.log('Generated SQL:', sqlQuery);
+            // Start timing for performance optimization
+            const startTime = Date.now();
 
-            // Execute the generated SQL query
-            const result = await db.pool.query(sqlQuery);
-            console.log('Query results:', result.rows.length, 'rows');
+            try {
+                // Use enhanced GPT system to generate SQL from natural language
+                const sqlQuery = await generateSQLFromQuestion(question);
+                console.log('🔍 Generated SQL:', sqlQuery);
 
-            // Generate natural language response
-            const naturalResponse = await generateNaturalLanguageResponse(question, result.rows, sqlQuery);
+                // Handle special responses from AI
+                if (sqlQuery === 'CONVERSATIONAL_QUERY') {
+                    console.log('💬 Handling as conversational question');
+                    
+                    // Generate a conversational response using the natural language function
+                    const conversationalResponse = await generateNaturalLanguageResponse(question, [], '');
+                    const responseTime = Date.now() - startTime;
+                    
+                    return res.json({
+                        answer: conversationalResponse,
+                        data: [],
+                        sql: null,
+                        suggestions: businessIntelligence.getFollowUpSuggestions(question, []),
+                        performance: {
+                            responseTime: responseTime,
+                            resultCount: 0,
+                            insights: businessIntelligence.getPerformanceInsights()
+                        },
+                        category: 'conversational',
+                        isConversational: true
+                    });
+                }
+                
+                if (sqlQuery === 'UNABLE_TO_CREATE_SQL') {
+                    console.log('⚠️ AI unable to create SQL');
+                    
+                    const responseTime = Date.now() - startTime;
+                    return res.json({
+                        answer: `I understand you're asking about "${question}", but I need more specific information to query your database. Let me suggest some ways to explore your Attic Projects data!`,
+                        data: [],
+                        sql: null,
+                        suggestions: [
+                            "How many leads do we have this month?",
+                            "Who are our top salespeople by revenue?",
+                            "What's the average deal size by branch?",
+                            "Show me recent leads that need follow-up"
+                        ],
+                        performance: {
+                            responseTime: responseTime,
+                            resultCount: 0,
+                            insights: businessIntelligence.getPerformanceInsights()
+                        },
+                        category: 'help',
+                        isConversational: true
+                    });
+                }
 
-            res.json({
-                answer: naturalResponse,
-                data: result.rows,
-                sql: sqlQuery
-            });
+                // Check if the response is actually SQL or conversational text
+                const sqlPattern = /^(SELECT|INSERT|UPDATE|DELETE|WITH|CREATE|ALTER|DROP)\s+/i;
+                const isValidSQL = sqlPattern.test(sqlQuery.trim());
+                
+                if (!isValidSQL) {
+                    console.log('⚠️ AI returned conversational text instead of SQL:', sqlQuery);
+                    
+                    // Return conversational response without trying to execute SQL
+                    const responseTime = Date.now() - startTime;
+                    return res.json({
+                        answer: sqlQuery, // The conversational response from AI
+                        data: [],
+                        sql: null,
+                        suggestions: businessIntelligence.getFollowUpSuggestions(question, []),
+                        performance: {
+                            responseTime: responseTime,
+                            resultCount: 0,
+                            insights: businessIntelligence.getPerformanceInsights()
+                        },
+                        category: businessIntelligence.categorizeBusinessQuestion ? businessIntelligence.categorizeBusinessQuestion(question) : 'general',
+                        isConversational: true
+                    });
+                }
+
+                // Execute the generated SQL query
+                const result = await db.pool.query(sqlQuery);
+                console.log(`📊 Query results: ${result.rows.length} rows in ${Date.now() - startTime}ms`);
+
+                // Generate enhanced natural language response with business intelligence
+                const naturalResponse = await generateNaturalLanguageResponse(question, result.rows, sqlQuery);
+
+                // Get smart follow-up suggestions based on business intelligence
+                const followUpSuggestions = businessIntelligence.getFollowUpSuggestions(question, result.rows);
+
+                // Get performance insights for this session
+                const performanceInsights = businessIntelligence.getPerformanceInsights();
+
+                const responseTime = Date.now() - startTime;
+                console.log(`⚡ Total response time: ${responseTime}ms`);
+
+                res.json({
+                    answer: naturalResponse,
+                    data: result.rows,
+                    sql: sqlQuery,
+                    suggestions: followUpSuggestions.slice(0, 3), // Top 3 suggestions
+                    performance: {
+                        responseTime: responseTime,
+                        resultCount: result.rows.length,
+                        insights: performanceInsights
+                    },
+                    category: businessIntelligence.categorizeBusinessQuestion ? businessIntelligence.categorizeBusinessQuestion(question) : 'general'
+                });
+
+            } catch (sqlError) {
+                console.error('❌ SQL Generation or Execution Error:', sqlError);
+                
+                // If SQL generation fails, try to provide a helpful conversational response
+                let fallbackResponse = '';
+                let suggestions = [];
+                
+                if (sqlError.message && sqlError.message.includes('syntax error')) {
+                    fallbackResponse = `I understand you're asking about "${question}", but I had trouble converting that into a database query. Let me help you ask a more specific question about your business data!`;
+                    suggestions = [
+                        "How many leads do we have this month?",
+                        "Who are our top 3 salespeople by revenue?",
+                        "What's the average deal size for each branch?",
+                        "Show me leads created in the last 30 days"
+                    ];
+                } else if (sqlError.message && sqlError.message.includes('relation') && sqlError.message.includes('does not exist')) {
+                    fallbackResponse = `I tried to access data that doesn't exist in your database. Let me help you explore the data we do have available for Attic Projects!`;
+                    suggestions = [
+                        "What tables are available in our database?",
+                        "Show me all leads from this year",
+                        "List our salespeople and their performance",
+                        "What are our branch locations?"
+                    ];
+                } else {
+                    // For other SQL errors, provide conversational response
+                    fallbackResponse = `I understand your question about "${question}", but I need to approach it differently. Let me suggest some specific ways to explore your business data!`;
+                    suggestions = businessIntelligence.getFollowUpSuggestions('general_business', []);
+                }
+
+                // Still learn from the interaction for future improvement
+                businessIntelligence.learnFromQuery(question, [], '');
+
+                const responseTime = Date.now() - startTime;
+                
+                res.json({
+                    answer: fallbackResponse,
+                    data: [],
+                    sql: null,
+                    suggestions: suggestions.slice(0, 4),
+                    performance: {
+                        responseTime: responseTime,
+                        resultCount: 0,
+                        insights: businessIntelligence.getPerformanceInsights()
+                    },
+                    category: 'conversational',
+                    isConversational: true,
+                    errorHandled: true
+                });
+            }
 
         } catch (error) {
-            console.error('Error in AI chat:', error);
+            console.error('❌ Error in enhanced AI chat:', error);
             
-            // If it's a SQL error, try to provide helpful feedback
-            if (error.message && error.message.includes('syntax error')) {
-                res.json({
-                    answer: 'I generated an invalid SQL query. Let me try a simpler approach. Could you rephrase your question or be more specific?',
-                    data: [],
-                    sql: null
-                });
-            } else if (error.message && error.message.includes('relation') && error.message.includes('does not exist')) {
-                res.json({
-                    answer: 'I tried to query a table that doesn\'t exist. Could you ask about leads, salespeople, branches, or customers?',
-                    data: [],
-                    sql: null
-                });
+            // Enhanced error handling with business intelligence
+            let userFriendlyMessage = '';
+            let suggestions = businessIntelligence.getFollowUpSuggestions('general_business', []);
+
+            if (error.response && error.response.status === 429) {
+                userFriendlyMessage = '⏱️ I\'m receiving too many requests right now. Please wait a moment and try again.';
+            } else if (error.response && error.response.status === 401) {
+                userFriendlyMessage = '🔑 There\'s an issue with the AI service authentication. Please check the API configuration.';
             } else {
-                res.json({ 
-                    answer: 'Sorry, I encountered an error processing your question. Please try rephrasing it or ask something simpler.',
-                    data: [],
-                    sql: null
-                });
+                userFriendlyMessage = '😅 I encountered an unexpected error. Let\'s try a simpler question or approach this differently!';
+                suggestions = [
+                    "How many leads do we have?",
+                    "Who are our salespeople?",
+                    "What branches do we operate in?"
+                ];
             }
+
+            // Get the question from the request for learning (fix scoping issue)
+            const questionFromRequest = req.body.question || 'unknown';
+            
+            // Still learn from the failed interaction
+            businessIntelligence.learnFromQuery(questionFromRequest, [], '');
+
+            res.json({ 
+                answer: userFriendlyMessage,
+                data: [],
+                sql: null,
+                suggestions: suggestions,
+                error: true,
+                errorType: error.response ? 'api_error' : 'general_error',
+                performance: {
+                    responseTime: 0,
+                    resultCount: 0,
+                    insights: businessIntelligence.getPerformanceInsights()
+                },
+                isConversational: true
+            });
         }
     }
 };

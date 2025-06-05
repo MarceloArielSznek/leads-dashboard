@@ -1,47 +1,34 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
 const campaignController = require('../controllers/campaignController');
+const { authenticateToken } = require('../middleware');
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/');
-    },
-    filename: function (req, file, cb) {
-        cb(null, Date.now() + '-campaign-' + file.originalname);
-    }
-});
+// Enhanced campaign routes (Group Builder)
+router.get('/available-leads', authenticateToken, campaignController.getAvailableLeads);
+router.post('/enhanced', authenticateToken, campaignController.createEnhancedCampaign);
 
-const upload = multer({ 
-    storage: storage,
-    fileFilter: function (req, file, cb) {
-        // Only allow Excel files
-        if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
-            file.mimetype === 'application/vnd.ms-excel') {
-            cb(null, true);
-        } else {
-            cb(new Error('Only Excel files (.xlsx, .xls) are allowed'), false);
-        }
-    }
-});
+// Group management routes
+router.get('/groups', authenticateToken, campaignController.getAllGroups);
+router.get('/groups/:id', authenticateToken, campaignController.getGroupById);
+router.get('/groups/:id/leads', authenticateToken, campaignController.getGroupLeads);
+router.delete('/groups/:id', authenticateToken, campaignController.deleteGroup);
+router.delete('/groups/:groupId/leads/:leadId', authenticateToken, campaignController.removeLeadFromGroup);
 
-// Campaign routes
-router.get('/', campaignController.getAllCampaigns);
-router.get('/types', campaignController.getCampaignTypes);
-router.get('/branches', campaignController.getBranches);
-router.get('/:id', campaignController.getCampaignById);
-router.post('/', campaignController.createCampaign);
-router.delete('/:id', campaignController.deleteCampaign);
-router.get('/:id/export', campaignController.exportCampaign);
-router.post('/:id/upload', upload.single('file'), campaignController.uploadLeads);
-// (Opcional: agregar updateCampaign y deleteCampaign si los implementas en el controlador)
+// CSV Export route
+router.post('/export-csv', authenticateToken, campaignController.exportGroupsToCsv);
 
-// Lead routes
-router.get('/:id/leads', campaignController.getCampaignLeads);
-router.get('/lead/:id', campaignController.getLeadById);
-router.put('/lead/:id', campaignController.updateLead);
-router.delete('/lead/:id', campaignController.deleteLead);
+// Branch routes (still needed for filtering)
+router.get('/branches', authenticateToken, campaignController.getBranches);
+
+// Lead routes (still needed for lead management)
+router.get('/lead/:id', authenticateToken, campaignController.getLeadById);
+router.put('/lead/:id', authenticateToken, campaignController.updateLead);
+router.delete('/lead/:id', authenticateToken, campaignController.deleteLead);
+
+// Toggle lead recovered status
+router.put('/lead/:leadId/toggle-recovered', authenticateToken, campaignController.toggleLeadRecoveredStatus);
+
+// Toggle lead texted status
+router.put('/lead/:leadId/toggle-texted', authenticateToken, campaignController.toggleLeadTextedStatus);
 
 module.exports = router; 
