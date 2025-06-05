@@ -38,7 +38,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: 'auto',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
@@ -153,9 +153,9 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Insights route
-app.get('/insights', (req, res) => {
-    res.render('insights');
-});
+// app.get('/insights', (req, res) => {
+//     res.render('insights');
+// });
 
 // Recovered leads route
 app.get('/recovered-leads', (req, res) => {

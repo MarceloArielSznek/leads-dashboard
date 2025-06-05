@@ -156,7 +156,7 @@ const login = async (req, res) => {
         // Set refresh token in httpOnly cookie
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: 'auto',
             sameSite: 'strict',
             maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000 // 30 days or 7 days
         });
