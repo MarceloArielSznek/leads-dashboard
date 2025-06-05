@@ -15,12 +15,12 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-// CORS configuration
+// CORS configuration - Super permissive for now, make more secure later
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie']
 }));
 
 // Trust proxy for rate limiting and IP detection
@@ -35,12 +35,12 @@ app.use('/uploads', express.static('uploads'));
 
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     cookie: {
-        secure: 'auto',
+        secure: false,
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     }
 }));
 
@@ -74,8 +74,21 @@ app.use('/campaign', campaignRoutes);
 app.use('/lead', leadRoutes);
 app.use('/admin', adminRoutes);
 app.use('/import', importRoutes);
-console.log('🟠 [app.js] About to use insightRoutes for /insights. Current request URL:', req.originalUrl, 'Path:', req.path);
-app.use('/insights', insightRoutes);
+
+// Middleware to log requests potentially going to /insights
+app.use('/insights', (req, res, next) => {
+    console.log('🟠 [app.js] Request to /insights path:', {
+        url: req.originalUrl,
+        path: req.path,
+        method: req.method,
+        headers: req.headers,
+        isAuthenticated: !!req.user,
+        cookies: req.cookies,
+        session: req.session
+    });
+    next();
+}, insightRoutes);
+
 app.use('/mailchimp', mailchimpRoutes);
 
 // Create uploads directory if it doesn't exist
