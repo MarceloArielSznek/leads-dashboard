@@ -22,8 +22,15 @@
 <head>
     <!-- Basic Meta Tags -->
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <!-- Mobile Optimization -->
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Leads Dashboard">
     
     <!-- Page Title -->
     <title><%= typeof title !== 'undefined' ? title + ' - Leads Dashboard' : 'Leads Dashboard' %></title>
@@ -51,6 +58,9 @@
                             600: '#2563eb',
                             700: '#1d4ed8',
                         }
+                    },
+                    screens: {
+                        'xs': '475px',
                     }
                 }
             }
@@ -80,6 +90,35 @@
         
         .content-transition {
             transition: margin-left 0.3s ease;
+        }
+        
+        /* Mobile Sidebar Overlay */
+        .mobile-sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 25;
+            transition: opacity 0.3s ease;
+        }
+        
+        .mobile-sidebar-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        /* Mobile Navigation */
+        @media (max-width: 768px) {
+            .mobile-nav-hidden {
+                transform: translateX(-100%);
+            }
+            
+            .mobile-nav-visible {
+                transform: translateX(0);
+            }
+            
+            .mobile-content {
+                margin-left: 0 !important;
+            }
         }
         
         /* Custom Scrollbar */
@@ -130,6 +169,19 @@
             transform: translateX(100%);
         }
         
+        /* Mobile-friendly notifications */
+        @media (max-width: 640px) {
+            .notifications-container {
+                left: 1rem !important;
+                right: 1rem !important;
+                top: 1rem !important;
+            }
+            
+            .notification-item {
+                max-width: none !important;
+            }
+        }
+        
         /* Loading Spinner */
         .spinner {
             border: 2px solid #f3f3f3;
@@ -169,6 +221,127 @@
         
         .btn-danger {
             @apply bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md font-medium transition-colors duration-200;
+        }
+        
+        /* Mobile Button Improvements */
+        @media (max-width: 640px) {
+            .btn-primary,
+            .btn-secondary,
+            .btn-success,
+            .btn-danger {
+                @apply px-3 py-2 text-sm;
+                min-height: 44px; /* iOS recommendation for touch targets */
+            }
+            
+            .btn-icon-only {
+                @apply p-3;
+                min-width: 44px;
+                min-height: 44px;
+            }
+        }
+        
+        /* Mobile-specific table styles */
+        @media (max-width: 768px) {
+            .mobile-table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .mobile-table-responsive table {
+                min-width: 100%;
+                font-size: 0.875rem;
+            }
+            
+            .mobile-table-responsive th,
+            .mobile-table-responsive td {
+                padding: 0.5rem;
+                white-space: nowrap;
+            }
+        }
+        
+        /* Mobile Card Improvements */
+        @media (max-width: 640px) {
+            .mobile-card {
+                margin: 0.5rem;
+                padding: 1rem;
+            }
+            
+            .mobile-card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }
+            
+            .mobile-card-actions {
+                width: 100%;
+                display: flex;
+                gap: 0.5rem;
+            }
+            
+            .mobile-card-actions > * {
+                flex: 1;
+            }
+        }
+        
+        /* Touch-friendly interactions */
+        .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Improved focus states for mobile */
+        @media (max-width: 768px) {
+            .focus\:ring-2:focus {
+                --tw-ring-offset-width: 1px;
+            }
+        }
+        
+        /* Mobile modal improvements */
+        @media (max-width: 640px) {
+            .mobile-modal {
+                margin: 1rem;
+                max-height: calc(100vh - 2rem);
+                overflow-y: auto;
+            }
+            
+            .mobile-modal-header {
+                position: sticky;
+                top: 0;
+                background: inherit;
+                z-index: 10;
+                border-bottom: 1px solid #e5e7eb;
+                padding-bottom: 1rem;
+                margin-bottom: 1rem;
+            }
+            
+            .dark .mobile-modal-header {
+                border-bottom-color: #374151;
+            }
+        }
+        
+        /* Prevent zoom on iOS inputs */
+        @media screen and (-webkit-min-device-pixel-ratio: 0) {
+            select,
+            textarea,
+            input[type="text"],
+            input[type="password"],
+            input[type="datetime"],
+            input[type="datetime-local"],
+            input[type="date"],
+            input[type="month"],
+            input[type="time"],
+            input[type="week"],
+            input[type="number"],
+            input[type="email"],
+            input[type="url"],
+            input[type="search"],
+            input[type="tel"],
+            input[type="color"] {
+                font-size: 16px;
+            }
         }
     </style>
     

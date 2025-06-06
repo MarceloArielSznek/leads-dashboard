@@ -2,7 +2,7 @@
   Sidebar Component - Navigation sidebar with collapsible functionality
   
   Description: This component provides a responsive sidebar with navigation items,
-  user profile section, and dark mode toggle. Supports collapsible state.
+  user profile section, and dark mode toggle. Supports collapsible state and mobile overlay.
   
   Parameters:
   - title: Application title (default: "Leads Dashboard")
@@ -19,54 +19,78 @@
   }) %>
 %>
 
+<!-- Mobile Sidebar Overlay (only visible on mobile when sidebar is open) -->
+<div v-if="isMobileSidebarOpen" 
+     @click="closeMobileSidebar"
+     class="mobile-sidebar-overlay fixed inset-0 bg-black bg-opacity-60 z-25 md:hidden backdrop-blur-sm"
+     :class="{'hidden': !isMobileSidebarOpen}">
+</div>
+
 <!-- Sidebar -->
 <aside :class="[
-    'fixed top-0 left-0 h-screen bg-white dark:bg-gray-800 shadow-sm sidebar-transition z-30 transition-colors duration-200',
-    isSidebarCollapsed ? 'w-20' : 'w-64'
+    'fixed top-0 left-0 h-screen bg-white dark:bg-gray-800 shadow-xl sidebar-transition z-30 transition-colors duration-200',
+    // Desktop behavior
+    'md:z-20',
+    isSidebarCollapsed ? 'md:w-20' : 'md:w-72',
+    // Mobile behavior - made wider for better usability
+    'w-80 md:transform-none transition-transform duration-300 ease-in-out',
+    isMobileSidebarOpen ? 'transform translate-x-0' : 'transform -translate-x-full md:translate-x-0'
 ]">
     <!-- Header Section -->
     <div class="h-16 border-b border-gray-100 dark:border-gray-700 flex items-center px-4 justify-between transition-colors duration-200">
-        <div class="flex items-center">
+        <div class="flex items-center min-w-0 flex-1">
             <button @click="toggleSidebar" 
-                    class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors">
+                    class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors touch-target p-2 -ml-2 flex-shrink-0">
                 <i class="fas" :class="isSidebarCollapsed ? 'fa-bars' : 'fa-times'"></i>
             </button>
-            <h1 v-if="!isSidebarCollapsed" class="ml-4 text-lg font-semibold text-gray-800 dark:text-gray-100">
+            <h1 v-if="!isSidebarCollapsed || isMobileSidebarOpen" class="ml-2 md:ml-4 text-lg md:text-xl font-semibold text-gray-800 dark:text-gray-100 truncate">
                 <%= typeof title !== 'undefined' ? title : 'Leads Dashboard' %>
             </h1>
         </div>
-        <button @click="toggleDarkMode" 
-                class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                :title="darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
-            <i :class="darkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
-        </button>
+        <div class="flex items-center space-x-1">
+            <button @click="toggleDarkMode" 
+                    class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors touch-target rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                    :title="darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+                <i :class="darkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
+            </button>
+            <!-- Close button for mobile -->
+            <button @click="closeMobileSidebar" 
+                    class="md:hidden text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors touch-target rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
     </div>
 
     <!-- Action Buttons Section -->
     <% if (typeof actionButtons !== 'undefined' && Array.isArray(actionButtons)) { %>
-    <div class="p-4">
+    <div :class="[
+        'space-y-3 transition-all duration-200',
+        (isSidebarCollapsed && !isMobileSidebarOpen) ? 'p-3' : 'p-4 md:p-5'
+    ]">
         <% actionButtons.forEach(function(button) { %>
         <% if (button.type === 'button') { %>
-        <button v-if="!isSidebarCollapsed" 
+        <button v-if="!isSidebarCollapsed || isMobileSidebarOpen" 
                 @click="<%= button.action %>" 
-                class="w-full <%= button.classes || 'bg-indigo-500 text-white hover:bg-indigo-600' %> px-4 py-2 rounded-md flex items-center justify-center transition-colors mb-2">
+                class="w-full <%= button.classes || 'bg-indigo-500 text-white hover:bg-indigo-600' %> px-4 py-3 rounded-md flex items-center justify-center transition-colors text-sm font-medium touch-target">
             <i class="<%= button.icon %> mr-2"></i>
             <%= button.label %>
         </button>
         <button v-else
                 @click="<%= button.action %>"
-                class="w-full <%= button.classes || 'bg-indigo-500 text-white hover:bg-indigo-600' %> p-2 rounded-md flex items-center justify-center transition-colors mb-2">
-            <i class="<%= button.icon %>"></i>
+                class="w-full <%= button.classes || 'bg-indigo-500 text-white hover:bg-indigo-600' %> rounded-md flex items-center justify-center transition-colors touch-target"
+                :class="(isSidebarCollapsed && !isMobileSidebarOpen) ? 'p-4 w-12 h-12' : 'p-3'">
+            <i class="<%= button.icon %>" :class="(isSidebarCollapsed && !isMobileSidebarOpen) ? 'text-lg' : ''"></i>
         </button>
         <% } else if (button.type === 'link') { %>
-        <a href="<%= button.href %>" v-if="!isSidebarCollapsed"
-           class="w-full <%= button.classes || 'bg-purple-500 text-white hover:bg-purple-600' %> px-4 py-2 rounded-md flex items-center justify-center transition-colors mt-2">
+        <a href="<%= button.href %>" v-if="!isSidebarCollapsed || isMobileSidebarOpen"
+           class="w-full <%= button.classes || 'bg-purple-500 text-white hover:bg-purple-600' %> px-4 py-3 rounded-md flex items-center justify-center transition-colors text-sm font-medium touch-target no-underline">
             <i class="<%= button.icon %> mr-2"></i>
             <%= button.label %>
         </a>
         <a href="<%= button.href %>" v-else
-           class="w-full <%= button.classes || 'bg-purple-500 text-white hover:bg-purple-600' %> p-2 rounded-md flex items-center justify-center transition-colors mt-2">
-            <i class="<%= button.icon %>"></i>
+           class="w-full <%= button.classes || 'bg-purple-500 text-white hover:bg-purple-600' %> rounded-md flex items-center justify-center transition-colors touch-target no-underline"
+           :class="(isSidebarCollapsed && !isMobileSidebarOpen) ? 'p-4 w-12 h-12' : 'p-3'">
+            <i class="<%= button.icon %>" :class="(isSidebarCollapsed && !isMobileSidebarOpen) ? 'text-lg' : ''"></i>
         </a>
         <% } %>
         <% }); %>
@@ -74,25 +98,27 @@
     <% } %>
 
     <!-- Navigation Menu -->
-    <nav class="mt-4 custom-scrollbar" style="height: calc(100vh - 8rem);">
+    <nav class="flex-1 custom-scrollbar overflow-y-auto" style="height: calc(100vh - 12rem);">
         <!-- Groups List (if enabled) -->
         <% if (typeof showGroupsList !== 'undefined' && showGroupsList) { %>
-        <div class="px-4 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase transition-colors duration-200" v-if="!isSidebarCollapsed">
+        <div class="px-4 md:px-5 mb-3 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider transition-colors duration-200" 
+             v-if="!isSidebarCollapsed || isMobileSidebarOpen">
             Lead Groups
         </div>
-        <ul>
+        <ul class="space-y-2 px-3 md:px-4">
             <li v-for="group in groups" 
                 :key="group.id"
                 @click="selectGroup(group)"
-                class="px-4 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                class="rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors touch-target"
                 :class="{'bg-indigo-50 dark:bg-indigo-900': selectedGroup?.id === group.id}">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center">
-                        <i class="fas fa-users text-gray-400 dark:text-gray-500"></i>
-                        <span v-if="!isSidebarCollapsed" class="ml-3 text-gray-600 dark:text-gray-300">{{ group.name }}</span>
-                        <span v-else class="ml-3 text-gray-600 dark:text-gray-300 text-sm font-medium">{{ getGroupInitials(group.name) }}</span>
+                <div class="flex items-center justify-between px-3 py-3">
+                    <div class="flex items-center min-w-0 flex-1">
+                        <i class="fas fa-users text-gray-400 dark:text-gray-500 flex-shrink-0"></i>
+                        <span v-if="!isSidebarCollapsed || isMobileSidebarOpen" class="ml-3 text-gray-600 dark:text-gray-300 truncate">{{ group.name }}</span>
+                        <span v-else class="sr-only">{{ group.name }}</span>
                     </div>
-                    <div v-if="!isSidebarCollapsed" class="text-xs text-gray-500 dark:text-gray-400">
+                    <div v-if="(!isSidebarCollapsed || isMobileSidebarOpen) && group.assigned_leads_count" 
+                         class="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded-full flex-shrink-0 ml-2">
                         {{ group.assigned_leads_count }}
                     </div>
                 </div>
@@ -102,23 +128,26 @@
 
         <!-- Regular Navigation Items -->
         <% if (typeof navigationItems !== 'undefined' && Array.isArray(navigationItems)) { %>
-        <div class="px-4 mb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase transition-colors duration-200" v-if="!isSidebarCollapsed">
+        <div class="px-4 md:px-5 mb-3 mt-6 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider transition-colors duration-200" 
+             v-if="!isSidebarCollapsed || isMobileSidebarOpen">
             Navigation
         </div>
-        <ul>
+        <ul class="space-y-2 px-3 md:px-4">
             <% navigationItems.forEach(function(item) { %>
             <li>
                 <% if (item.type === 'link') { %>
                 <a href="<%= item.href %>" 
-                   class="flex items-center px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors <%= typeof currentPage !== 'undefined' && currentPage === item.id ? 'bg-indigo-50 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400' : '' %>">
-                    <i class="<%= item.icon %> text-gray-400 dark:text-gray-500"></i>
-                    <span v-if="!isSidebarCollapsed" class="ml-3"><%= item.label %></span>
+                   class="flex items-center px-3 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors rounded-md touch-target no-underline <%= typeof currentPage !== 'undefined' && currentPage === item.id ? 'bg-indigo-50 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400' : '' %>">
+                    <i class="<%= item.icon %> text-gray-400 dark:text-gray-500 flex-shrink-0"></i>
+                    <span v-if="!isSidebarCollapsed || isMobileSidebarOpen" class="ml-3"><%= item.label %></span>
+                    <span v-else class="sr-only"><%= item.label %></span>
                 </a>
                 <% } else if (item.type === 'button') { %>
                 <button @click="<%= item.action %>"
-                        class="w-full flex items-center px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left">
-                    <i class="<%= item.icon %> text-gray-400 dark:text-gray-500"></i>
-                    <span v-if="!isSidebarCollapsed" class="ml-3"><%= item.label %></span>
+                        class="w-full flex items-center px-3 py-3 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-left rounded-md touch-target">
+                    <i class="<%= item.icon %> text-gray-400 dark:text-gray-500 flex-shrink-0"></i>
+                    <span v-if="!isSidebarCollapsed || isMobileSidebarOpen" class="ml-3"><%= item.label %></span>
+                    <span v-else class="sr-only"><%= item.label %></span>
                 </button>
                 <% } %>
             </li>
@@ -132,13 +161,13 @@
             <div class="text-gray-400 dark:text-gray-500 mb-2">
                 <i class="fas fa-users text-3xl"></i>
             </div>
-            <p v-if="!isSidebarCollapsed" class="text-sm text-gray-500 dark:text-gray-400">No groups yet</p>
+            <p v-if="!isSidebarCollapsed || isMobileSidebarOpen" class="text-sm text-gray-500 dark:text-gray-400">No groups yet</p>
         </div>
         <% } %>
     </nav>
 
     <!-- User Profile Section -->
-    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100 dark:border-gray-700 transition-colors duration-200">
+    <div class="border-t border-gray-100 dark:border-gray-700 transition-colors duration-200 p-4 md:p-5">
         <div class="flex items-center justify-between">
             <div class="flex items-center min-w-0 flex-1">
                 <!-- User Avatar -->
@@ -148,8 +177,8 @@
                          class="w-10 h-10 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600">
                 </div>
                 
-                <!-- User Info (only shown when expanded) -->
-                <div v-if="!isSidebarCollapsed" class="ml-3 min-w-0 flex-1">
+                <!-- User Info (shown when expanded or on mobile) -->
+                <div v-if="!isSidebarCollapsed || isMobileSidebarOpen" class="ml-3 min-w-0 flex-1">
                     <p class="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
                         {{ currentUser.fullName || currentUser.username || 'Loading...' }}
                     </p>
@@ -166,14 +195,23 @@
             </div>
             
             <!-- Admin Panel Button -->
-            <div class="flex-shrink-0 ml-2">
+            <div class="flex-shrink-0" :class="{'ml-2': !isSidebarCollapsed || isMobileSidebarOpen}">
                 <a href="/admin-panel" 
-                   class="bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 p-2 rounded-full hover:bg-indigo-500 hover:text-white flex items-center justify-center transition-colors" 
-                   :title="isSidebarCollapsed ? 'Admin Panel' : 'Go to Admin Panel'">
-                    <i class="fas fa-cog text-sm"></i>
+                   class="bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-full hover:bg-indigo-500 hover:text-white flex items-center justify-center transition-colors touch-target"
+                   :class="(isSidebarCollapsed && !isMobileSidebarOpen) ? 'w-10 h-10' : 'w-8 h-8'"
+                   :title="(isSidebarCollapsed && !isMobileSidebarOpen) ? 'Admin Panel' : 'Go to Admin Panel'">
+                    <i class="fas fa-cog" :class="(isSidebarCollapsed && !isMobileSidebarOpen) ? 'text-base' : 'text-sm'"></i>
                 </a>
             </div>
         </div>
+        
+        <!-- Logout Button (always visible) -->
+        <button @click="logout" 
+                class="w-full bg-red-500 hover:bg-red-600 text-white rounded-md text-sm font-medium transition-colors flex items-center justify-center mt-3 touch-target"
+                :class="(isSidebarCollapsed && !isMobileSidebarOpen) ? 'p-3' : 'px-3 py-3'">
+            <i class="fas fa-sign-out-alt" :class="(isSidebarCollapsed && !isMobileSidebarOpen) ? '' : 'mr-2'"></i>
+            <span v-if="!isSidebarCollapsed || isMobileSidebarOpen">Logout</span>
+        </button>
     </div>
 </aside>
 
@@ -183,6 +221,7 @@ const sidebarMixin = {
     data() {
         return {
             isSidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+            isMobileSidebarOpen: false,
             darkMode: localStorage.getItem('darkMode') === 'true',
             currentUser: {
                 username: '',
@@ -198,104 +237,37 @@ const sidebarMixin = {
     computed: {
         userAvatar() {
             const name = this.currentUser.fullName || this.currentUser.username || 'User';
-            const initial = name.charAt(0).toUpperCase();
-            return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366F1&color=fff&size=128`;
+            return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff&size=128`;
         }
-    },
-    
-    mounted() {
-        // Apply dark mode on mount
-        if (this.darkMode) {
-            document.documentElement.classList.add('dark');
-        }
-        
-        // Load user data
-        this.loadUserData();
-        
-        // Handle responsive sidebar
-        this.handleResize();
-        window.addEventListener('resize', this.handleResize);
-    },
-    
-    beforeUnmount() {
-        window.removeEventListener('resize', this.handleResize);
     },
     
     methods: {
-        /**
-         * Load user data from localStorage
-         */
-        loadUserData() {
-            try {
-                const userDataString = localStorage.getItem('user');
-                if (userDataString) {
-                    const userData = JSON.parse(userDataString);
-                    console.log('🔍 Raw user data from localStorage:', userData);
-                    
-                    // Handle the actual structure from login response
-                    const fullName = userData.firstName && userData.lastName 
-                        ? `${userData.firstName} ${userData.lastName}` 
-                        : userData.firstName || userData.lastName || '';
-                    
-                    this.currentUser = {
-                        username: userData.username || '',
-                        email: userData.email || '',
-                        fullName: fullName,
-                        roleName: userData.role?.name || userData.roleName || '',
-                        roleDisplayName: userData.role?.displayName || userData.roleDisplayName || '',
-                        branchName: userData.branch?.name || userData.branchName || ''
-                    };
-                    
-                    console.log('✅ Processed user data:', this.currentUser);
-                } else {
-                    console.warn('⚠️ No user data found in localStorage');
-                }
-            } catch (error) {
-                console.error('❌ Error loading user data:', error);
+        toggleSidebar() {
+            // On mobile, toggle mobile sidebar
+            if (window.innerWidth < 768) {
+                this.isMobileSidebarOpen = !this.isMobileSidebarOpen;
+            } else {
+                // On desktop, toggle collapsed state
+                this.isSidebarCollapsed = !this.isSidebarCollapsed;
+                localStorage.setItem('sidebarCollapsed', this.isSidebarCollapsed);
             }
         },
         
-        /**
-         * Get role badge CSS class
-         */
-        getRoleBadgeClass(role) {
-            const roleClasses = {
-                'admin': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-                'manager': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-                'salesperson': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-                'user': 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-            };
-            return roleClasses[role?.toLowerCase()] || roleClasses['user'];
+        openMobileSidebar() {
+            this.isMobileSidebarOpen = true;
+            // Prevent body scroll when sidebar is open
+            document.body.style.overflow = 'hidden';
         },
         
-        /**
-         * Get role display name
-         */
-        getRoleDisplayName(role) {
-            const roleNames = {
-                'admin': 'Administrator',
-                'manager': 'Manager', 
-                'salesperson': 'Sales Person',
-                'user': 'User'
-            };
-            return roleNames[role?.toLowerCase()] || role;
+        closeMobileSidebar() {
+            this.isMobileSidebarOpen = false;
+            // Restore body scroll
+            document.body.style.overflow = '';
         },
         
-        /**
-         * Toggle sidebar collapsed state
-         */
-        toggleSidebar() {
-            this.isSidebarCollapsed = !this.isSidebarCollapsed;
-            localStorage.setItem('sidebarCollapsed', this.isSidebarCollapsed);
-        },
-        
-        /**
-         * Toggle dark mode
-         */
         toggleDarkMode() {
             this.darkMode = !this.darkMode;
             localStorage.setItem('darkMode', this.darkMode);
-            
             if (this.darkMode) {
                 document.documentElement.classList.add('dark');
             } else {
@@ -303,14 +275,47 @@ const sidebarMixin = {
             }
         },
         
-        /**
-         * Handle responsive sidebar behavior
-         */
-        handleResize() {
-            if (window.innerWidth < 768) {
-                this.isSidebarCollapsed = true;
-            }
+        getRoleBadgeClass(roleName) {
+            const roleClasses = {
+                'admin': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+                'manager': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+                'user': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+                'viewer': 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+            };
+            return roleClasses[roleName] || roleClasses['user'];
+        },
+        
+        getRoleDisplayName(roleName) {
+            const roleNames = {
+                'admin': 'Administrator',
+                'manager': 'Manager',
+                'user': 'User',
+                'viewer': 'Viewer'
+            };
+            return roleNames[roleName] || roleName;
         }
+    },
+    
+    mounted() {
+        // Initialize dark mode
+        if (this.darkMode) {
+            document.documentElement.classList.add('dark');
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 768) {
+                this.closeMobileSidebar();
+            }
+        });
+        
+        // Close mobile sidebar when clicking outside (handled by overlay)
+        // Handle escape key to close mobile sidebar
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isMobileSidebarOpen) {
+                this.closeMobileSidebar();
+            }
+        });
     }
-}
+};
 </script> 

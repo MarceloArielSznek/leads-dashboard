@@ -37,9 +37,9 @@
     </style>
 </head>
 <body class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-    <div id="app" class="min-h-screen flex items-center justify-center p-4">
+    <div id="app" class="min-h-screen flex items-center justify-center p-4 sm:p-6">
         <!-- Main Container -->
-        <div class="w-full max-w-md">
+        <div class="w-full max-w-md mx-auto">
             <!-- Header -->
             <div class="text-center mb-8">
                 <div class="inline-flex items-center justify-center w-12 h-12 bg-indigo-600 rounded-lg mb-4">
@@ -50,7 +50,7 @@
             </div>
 
             <!-- Login Card -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 login-card transition-colors duration-200">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 sm:p-8 login-card transition-colors duration-200 mobile-card">
                 <!-- Alert Messages -->
                 <div v-if="alert.show" :class="[
                     'mb-6 p-4 rounded-lg border transition-all duration-300',
@@ -131,8 +131,8 @@
                     </div>
 
                     <!-- Remember Me & Forgot Password -->
-                    <div class="flex items-center justify-between">
-                        <label class="flex items-center cursor-pointer">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+                        <label class="flex items-center cursor-pointer touch-target">
                             <input 
                                 v-model="form.rememberMe"
                                 type="checkbox"
@@ -140,7 +140,7 @@
                                 :disabled="isLoading">
                             <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">Remember me</span>
                         </label>
-                        <a href="#" @click.prevent="showForgotPassword = true" class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors">
+                        <a href="#" @click.prevent="showForgotPassword = true" class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors touch-target">
                             Forgot password?
                         </a>
                     </div>
@@ -149,7 +149,7 @@
                     <button 
                         type="submit"
                         :disabled="isLoading || !isFormValid"
-                        class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 touch-target">
                         <div v-if="isLoading" class="flex items-center justify-center">
                             <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

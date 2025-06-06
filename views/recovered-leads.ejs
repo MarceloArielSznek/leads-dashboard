@@ -34,6 +34,46 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+        
+        /* Mobile-specific touch target enhancements */
+        .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+        }
+        
+        /* Mobile table responsiveness */
+        @media (max-width: 768px) {
+            .mobile-table-responsive {
+                font-size: 0.875rem;
+            }
+            
+            .mobile-table-responsive th,
+            .mobile-table-responsive td {
+                padding: 0.75rem 0.5rem;
+            }
+        }
+        
+        /* iOS zoom prevention */
+        @media screen and (-webkit-min-device-pixel-ratio: 0) {
+            select,
+            textarea,
+            input[type="text"],
+            input[type="password"],
+            input[type="datetime"],
+            input[type="datetime-local"],
+            input[type="date"],
+            input[type="month"],
+            input[type="time"],
+            input[type="week"],
+            input[type="number"],
+            input[type="email"],
+            input[type="url"],
+            input[type="search"],
+            input[type="tel"],
+            input[type="color"] {
+                font-size: 16px;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
@@ -60,28 +100,28 @@
 
         <!-- Header -->
         <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-100 dark:border-gray-700 transition-colors duration-200">
-            <div class="px-6 py-4">
-                <div class="flex justify-between items-center">
+            <div class="px-4 sm:px-6 py-4">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                     <div class="flex items-center">
-                        <a href="/dashboard" class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 mr-4 transition-colors">
+                        <a href="/dashboard" class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 mr-3 sm:mr-4 transition-colors touch-target">
                             <i class="fas fa-arrow-left"></i>
                         </a>
-                        <h1 class="text-2xl font-semibold text-gray-800 dark:text-gray-100">Recovered Leads Portal</h1>
+                        <h1 class="text-xl sm:text-2xl font-semibold text-gray-800 dark:text-gray-100 truncate">Recovered Leads Portal</h1>
                     </div>
-                    <div class="flex items-center space-x-4">
-                        <div class="text-sm text-gray-500 dark:text-gray-400">
-                            <span class="font-medium">{{ filteredLeads.length }}</span> recovered leads
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:space-x-4 sm:gap-0">
+                       
+                        <div class="flex flex-col sm:flex-row gap-2 sm:space-x-2 sm:gap-0">
+                            <button @click="toggleDarkMode" 
+                                    class="bg-gray-500 text-white px-4 py-3 sm:py-2 rounded-md hover:bg-gray-600 flex items-center justify-center transition-colors touch-target">
+                                <i :class="darkMode ? 'fas fa-sun' : 'fas fa-moon'" class="mr-2"></i>
+                                {{ darkMode ? 'Light' : 'Dark' }}
+                            </button>
+                            <button @click="refreshData" 
+                                    class="bg-indigo-500 text-white px-4 py-3 sm:py-2 rounded-md hover:bg-indigo-600 transition-colors flex items-center justify-center touch-target">
+                                <i class="fas fa-sync-alt mr-2" :class="{ 'animate-spin': isLoading }"></i>
+                                Refresh
+                            </button>
                         </div>
-                        <button @click="toggleDarkMode" 
-                                class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 flex items-center transition-colors">
-                            <i :class="darkMode ? 'fas fa-sun' : 'fas fa-moon'" class="mr-2"></i>
-                            {{ darkMode ? 'Light' : 'Dark' }}
-                        </button>
-                        <button @click="refreshData" 
-                                class="bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 transition-colors flex items-center">
-                            <i class="fas fa-sync-alt mr-2" :class="{ 'animate-spin': isLoading }"></i>
-                            Refresh
-                        </button>
                     </div>
                 </div>
             </div>
@@ -210,7 +250,7 @@
                 <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Recovered Leads</h3>
                 </div>
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto mobile-table-responsive">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-700">
                             <tr>
@@ -301,54 +341,43 @@
                 </div>
 
                 <!-- Pagination -->
-                <div v-if="totalPages > 1" class="bg-white dark:bg-gray-800 px-4 py-3 border-t border-gray-200 dark:border-gray-700 sm:px-6">
-                    <div class="flex items-center justify-between">
-                        <div class="flex-1 flex justify-between sm:hidden">
-                            <button @click="currentPage = Math.max(1, currentPage - 1)" 
-                                    :disabled="currentPage === 1"
-                                    class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50">
-                                Previous
-                            </button>
-                            <button @click="currentPage = Math.min(totalPages, currentPage + 1)" 
-                                    :disabled="currentPage === totalPages"
-                                    class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50">
-                                Next
+                <div v-if="totalPages > 1" class="bg-white dark:bg-gray-800 px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                    <!-- Page Info - Centered -->
+                    <div class="flex justify-center mb-4">
+                        <p class="text-sm text-gray-700 dark:text-gray-300 text-center">
+                            Showing <span class="font-medium">{{ (currentPage - 1) * itemsPerPage + 1 }}</span>
+                            to <span class="font-medium">{{ Math.min(currentPage * itemsPerPage, filteredLeads.length) }}</span>
+                            of <span class="font-medium">{{ filteredLeads.length }}</span> results
+                        </p>
+                    </div>
+                    
+                    <!-- Pagination Buttons - Centered -->
+                    <div class="flex flex-wrap items-center justify-center gap-1 sm:gap-0">
+                        <button @click="currentPage = Math.max(1, currentPage - 1)" 
+                                :disabled="currentPage === 1"
+                                class="relative inline-flex items-center px-3 py-2 sm:py-1 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 touch-target">
+                            Previous
+                        </button>
+                        
+                        <div class="flex items-center gap-1 sm:gap-0 mx-2">
+                            <button v-for="page in visiblePages" 
+                                    :key="page"
+                                    @click="currentPage = page"
+                                    :class="[
+                                        'relative inline-flex items-center px-3 py-2 sm:py-1 border text-sm font-medium rounded-md touch-target',
+                                        page === currentPage 
+                                            ? 'z-10 bg-indigo-50 dark:bg-indigo-900 border-indigo-500 text-indigo-600 dark:text-indigo-400' 
+                                            : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600'
+                                    ]">
+                                {{ page }}
                             </button>
                         </div>
-                        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                            <div>
-                                <p class="text-sm text-gray-700 dark:text-gray-300">
-                                    Showing <span class="font-medium">{{ (currentPage - 1) * itemsPerPage + 1 }}</span>
-                                    to <span class="font-medium">{{ Math.min(currentPage * itemsPerPage, filteredLeads.length) }}</span>
-                                    of <span class="font-medium">{{ filteredLeads.length }}</span> results
-                                </p>
-                            </div>
-                            <div>
-                                <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                                    <button @click="currentPage = Math.max(1, currentPage - 1)" 
-                                            :disabled="currentPage === 1"
-                                            class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50">
-                                        <i class="fas fa-chevron-left"></i>
-                                    </button>
-                                    <button v-for="page in visiblePages" 
-                                            :key="page"
-                                            @click="currentPage = page"
-                                            :class="[
-                                                'relative inline-flex items-center px-4 py-2 border text-sm font-medium',
-                                                page === currentPage 
-                                                    ? 'z-10 bg-indigo-50 dark:bg-indigo-900 border-indigo-500 text-indigo-600 dark:text-indigo-400' 
-                                                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600'
-                                            ]">
-                                        {{ page }}
-                                    </button>
-                                    <button @click="currentPage = Math.min(totalPages, currentPage + 1)" 
-                                            :disabled="currentPage === totalPages"
-                                            class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50">
-                                        <i class="fas fa-chevron-right"></i>
-                                    </button>
-                                </nav>
-                            </div>
-                        </div>
+                        
+                        <button @click="currentPage = Math.min(totalPages, currentPage + 1)" 
+                                :disabled="currentPage === totalPages"
+                                class="relative inline-flex items-center px-3 py-2 sm:py-1 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 touch-target">
+                            Next
+                        </button>
                     </div>
                 </div>
             </div>

@@ -45,6 +45,13 @@
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
     <div id="app" class="min-h-screen">
+        <!-- Mobile Sidebar Overlay (only visible on mobile when sidebar is open) -->
+        <div v-if="isMobileSidebarOpen" 
+             @click="closeMobileSidebar"
+             class="mobile-sidebar-overlay fixed inset-0 bg-black bg-opacity-50 z-25 md:hidden"
+             :class="{'hidden': !isMobileSidebarOpen}">
+        </div>
+
         <!-- Notifications -->
         <div class="fixed top-4 right-4 z-50">
             <transition-group name="notification">
@@ -67,55 +74,68 @@
 
         <!-- Sidebar with integrated header -->
         <aside :class="[
-            'fixed top-0 left-0 h-screen bg-white dark:bg-gray-800 shadow-sm sidebar-transition z-30 transition-colors duration-200',
-            isSidebarCollapsed ? 'w-20' : 'w-64'
+            'fixed top-0 left-0 h-screen bg-white dark:bg-gray-800 shadow-lg sidebar-transition z-30 transition-colors duration-200',
+            // Desktop behavior
+            'md:z-20',
+            isSidebarCollapsed ? 'md:w-20' : 'md:w-64',
+            // Mobile behavior
+            'w-64 md:transform-none transition-transform duration-300 ease-in-out',
+            isMobileSidebarOpen ? 'transform translate-x-0' : 'transform -translate-x-full md:translate-x-0'
         ]">
             <!-- Header Section -->
             <div class="h-16 border-b border-gray-100 dark:border-gray-700 flex items-center px-4 justify-between transition-colors duration-200">
                 <div class="flex items-center">
-                    <button @click="toggleSidebar" class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors">
-                    <i class="fas" :class="isSidebarCollapsed ? 'fa-bars' : 'fa-times'"></i>
-                </button>
-                    <h1 v-if="!isSidebarCollapsed" class="ml-4 text-lg font-semibold text-gray-800 dark:text-gray-100">Groups Dashboard</h1>
+                    <button @click="toggleSidebar" 
+                            class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors touch-target p-2 -ml-2">
+                        <i class="fas" :class="isSidebarCollapsed ? 'fa-bars' : 'fa-times'"></i>
+                    </button>
+                    <h1 v-if="!isSidebarCollapsed || isMobileSidebarOpen" class="ml-2 md:ml-4 text-lg font-semibold text-gray-800 dark:text-gray-100 truncate">Groups Dashboard</h1>
                 </div>
-                <button @click="toggleDarkMode" 
-                        class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                        :title="darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
-                    <i :class="darkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
-                </button>
+                <div class="flex items-center space-x-1">
+                    <button @click="toggleDarkMode" 
+                            class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors touch-target rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                            :title="darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+                        <i :class="darkMode ? 'fas fa-sun' : 'fas fa-moon'"></i>
+                    </button>
+                    <!-- Close button for mobile -->
+                    <button @click="closeMobileSidebar" 
+                            class="md:hidden text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 transition-colors touch-target rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Action Buttons -->
-            <div class="p-4">
-                <button v-if="!isSidebarCollapsed" 
+            <div class="p-4 space-y-2">
+                <button v-if="!isSidebarCollapsed || isMobileSidebarOpen" 
                         @click="openGroupBuilderModal" 
-                        class="w-full bg-indigo-500 text-white px-4 py-2 rounded-md hover:bg-indigo-600 flex items-center justify-center transition-colors mb-2">
+                        class="w-full bg-indigo-500 text-white px-4 py-3 rounded-md hover:bg-indigo-600 flex items-center justify-center transition-colors text-sm font-medium touch-target">
                     <i class="fas fa-plus mr-2"></i>
                     New Group
                 </button>
                 <button v-else
                         @click="openGroupBuilderModal"
-                        class="w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600 flex items-center justify-center transition-colors mb-2">
+                        class="w-full bg-indigo-500 text-white rounded-md hover:bg-indigo-600 flex items-center justify-center transition-colors touch-target">
                     <i class="fas fa-plus"></i>
                 </button>
                 
-                <a href="/insights" v-if="!isSidebarCollapsed"
-                   class="w-full bg-purple-500 text-white px-4 py-2 rounded-md hover:bg-purple-600 flex items-center justify-center transition-colors mt-2">
+                <a href="/insights" v-if="!isSidebarCollapsed || isMobileSidebarOpen"
+                   class="w-full bg-purple-500 text-white px-4 py-3 rounded-md hover:bg-purple-600 flex items-center justify-center transition-colors text-sm font-medium touch-target no-underline">
                     <i class="fas fa-chart-line mr-2"></i>
                     Insights
                 </a>
                 <a href="/insights" v-else
-                   class="w-full bg-purple-500 text-white p-2 rounded-md hover:bg-purple-600 flex items-center justify-center transition-colors mt-2">
+                   class="w-full bg-purple-500 text-white rounded-md hover:bg-purple-600 flex items-center justify-center transition-colors touch-target no-underline">
                     <i class="fas fa-chart-line"></i>
                 </a>
                 
-                <a href="/insights/recovered-leads" v-if="!isSidebarCollapsed"
-                   class="w-full bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 flex items-center justify-center transition-colors mt-2">
+                <a href="/insights/recovered-leads" v-if="!isSidebarCollapsed || isMobileSidebarOpen"
+                   class="w-full bg-teal-500 text-white px-4 py-3 rounded-md hover:bg-teal-600 flex items-center justify-center transition-colors text-sm font-medium touch-target no-underline">
                     <i class="fas fa-redo mr-2"></i>
                     Recovered Leads
                 </a>
                 <a href="/insights/recovered-leads" v-else
-                   class="w-full bg-teal-500 text-white p-2 rounded-md hover:bg-teal-600 flex items-center justify-center transition-colors mt-2">
+                   class="w-full bg-teal-500 text-white rounded-md hover:bg-teal-600 flex items-center justify-center transition-colors touch-target no-underline">
                     <i class="fas fa-redo"></i>
                 </a>
             </div>
@@ -209,24 +229,37 @@
             </div>
         </aside>
 
+        <!-- Mobile Navigation Toggle (visible only on mobile) -->
+        <button v-if="!isMobileSidebarOpen" 
+                @click="openMobileSidebar"
+                :class="[
+                    'fixed top-6 left-6 z-50 md:hidden bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl p-3 shadow-lg hover:shadow-indigo-500/25 active:scale-95 transition-all duration-300 ease-out flex items-center justify-center border-0 min-w-[44px] min-h-[44px] w-11 h-11',
+                    { 'opacity-40 hover:opacity-100': isScrolled }
+                ]">
+            <i class="fas fa-bars text-lg"></i>
+        </button>
+
         <!-- Main Content -->
         <main :class="[
-            'content-transition',
-            isSidebarCollapsed ? 'ml-20' : 'ml-64'
+            'content-transition min-h-screen',
+            // Desktop margins
+            'md:' + (isSidebarCollapsed ? 'ml-20' : 'ml-64'),
+            // Mobile: full width with top padding for mobile nav button
+            'ml-0 pt-16 md:pt-0'
         ]">
-            <div class="p-6">
+            <div class="p-4 md:p-6">
                 <!-- Overview Dashboard (when no group selected) -->
                 <div v-if="!selectedGroup">
                     <!-- Header -->
-                    <div class="mb-8">
-                        <div class="flex items-center justify-between">
+                    <div class="mb-6 md:mb-8">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                 <div>
-                                <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">Groups Overview</h1>
-                                <p class="text-gray-600 dark:text-gray-300 mt-2">Manage your lead groups and follow-up strategies</p>
+                                <h1 class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100">Groups Overview</h1>
+                                <p class="text-gray-600 dark:text-gray-300 mt-1 md:mt-2 text-sm md:text-base">Manage your lead groups and follow-up strategies</p>
                                 </div>
                             <!-- CSV Export Button -->
                             <button @click="openCsvExportModal" 
-                                    class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center">
+                                    class="bg-green-500 hover:bg-green-600 text-white px-4 py-3 md:py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center sm:justify-start touch-target">
                                         <i class="fas fa-file-excel mr-2"></i>
                                 Export CSV
                             </button>
@@ -234,99 +267,99 @@
                             </div>
 
                     <!-- Overview Stats -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-                        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-6 md:mb-8">
+                        <div class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                             <div class="flex items-center">
-                                <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                                <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg flex-shrink-0">
                                     <i class="fas fa-users text-blue-600 dark:text-blue-400"></i>
                         </div>
-                                <div class="ml-4">
-                                    <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ groups.length }}</p>
-                                    <p class="text-gray-600 dark:text-gray-300">Total Groups</p>
+                                <div class="ml-3 md:ml-4 min-w-0">
+                                    <p class="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ groups.length }}</p>
+                                    <p class="text-gray-600 dark:text-gray-300 text-sm md:text-base">Total Groups</p>
                         </div>
                                 </div>
                             </div>
 
-                        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                             <div class="flex items-center">
-                                <div class="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                                <div class="p-2 bg-green-100 dark:bg-green-900 rounded-lg flex-shrink-0">
                                     <i class="fas fa-user-tie text-green-600 dark:text-green-400"></i>
                                 </div>
-                                <div class="ml-4">
-                                    <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ getTotalLeads() }}</p>
-                                    <p class="text-gray-600 dark:text-gray-300">Assigned Leads</p>
+                                <div class="ml-3 md:ml-4 min-w-0">
+                                    <p class="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ getTotalLeads() }}</p>
+                                    <p class="text-gray-600 dark:text-gray-300 text-sm md:text-base">Assigned Leads</p>
                             </div>
                                 </div>
                             </div>
 
-                        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                             <div class="flex items-center">
-                                <div class="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+                                <div class="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg flex-shrink-0">
                                     <i class="fas fa-dollar-sign text-yellow-600 dark:text-yellow-400"></i>
                                 </div>
-                                <div class="ml-4">
-                                    <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">${{ formatCurrency(getTotalValue()) }}</p>
-                                    <p class="text-gray-600 dark:text-gray-300">Potential Recovery</p>
+                                <div class="ml-3 md:ml-4 min-w-0">
+                                    <p class="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">${{ formatCurrency(getTotalValue()) }}</p>
+                                    <p class="text-gray-600 dark:text-gray-300 text-sm md:text-base">Potential Recovery</p>
                             </div>
                         </div>
                                 </div>
 
-                        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                             <div class="flex items-center">
-                                <div class="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                                <div class="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg flex-shrink-0">
                                     <i class="fas fa-check-circle text-purple-600 dark:text-purple-400"></i>
                             </div>
-                                <div class="ml-4">
-                                    <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">${{ formatCurrency(getRecoveredAmount()) }}</p>
-                                    <p class="text-gray-600 dark:text-gray-300">Recovered Amount</p>
+                                <div class="ml-3 md:ml-4 min-w-0">
+                                    <p class="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">${{ formatCurrency(getRecoveredAmount()) }}</p>
+                                    <p class="text-gray-600 dark:text-gray-300 text-sm md:text-base">Recovered Amount</p>
                         </div>
                             </div>
                         </div>
 
-                        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                             <div class="flex items-center">
-                                <div class="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                                <div class="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg flex-shrink-0">
                                     <i class="fas fa-trophy text-orange-600 dark:text-orange-400"></i>
                             </div>
-                                <div class="ml-4">
-                                    <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ getTotalRecoveredLeadsCount() }}</p>
-                                    <p class="text-gray-600 dark:text-gray-300">Total Recovered Leads</p>
+                                <div class="ml-3 md:ml-4 min-w-0">
+                                    <p class="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100">{{ getTotalRecoveredLeadsCount() }}</p>
+                                    <p class="text-gray-600 dark:text-gray-300 text-sm md:text-base">Total Recovered Leads</p>
                         </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Groups Cards -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                         <div v-for="group in groups" :key="group.id" 
                              class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer"
                              @click="selectGroup(group)">
-                            <div class="p-6">
-                                <div class="flex items-center justify-between mb-4">
-                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ group.name }}</h3>
-                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                            <div class="p-4 md:p-6">
+                                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 gap-2">
+                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 min-w-0 flex-1 truncate">{{ group.name }}</h3>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">
                                         <i class="fas fa-calendar mr-1"></i>
                                         {{ formatDate(group.created_at) }}
                                     </div>
                                 </div>
                                 
-                                <p class="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">
+                                <p class="text-gray-600 dark:text-gray-300 mb-4 text-sm md:text-base line-clamp-2">
                                   {{ (group.description || 'No description provided').split('Exported to Mailchimp:')[0].split('Synced with Mailchimp')[0].trim() }}
                                 </p>
                                 
-                                <div class="flex items-center justify-between">
-                                <div class="flex items-center space-x-4">
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div class="flex items-center space-x-4 sm:space-x-6">
                                         <div class="text-center">
-                                            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ group.assigned_leads_count }}</div>
+                                            <div class="text-xl md:text-2xl font-bold text-blue-600 dark:text-blue-400">{{ group.assigned_leads_count }}</div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400">Leads</div>
                                         </div>
                                         <div class="text-center">
-                                            <div class="text-2xl font-bold text-green-600 dark:text-green-400">${{ formatCurrency(group.total_proposal_amount) }}</div>
+                                            <div class="text-xl md:text-2xl font-bold text-green-600 dark:text-green-400">${{ formatCurrency(group.total_proposal_amount) }}</div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400">Potential Recovery</div>
                                         </div>
                                     </div>
                                     
-                                    <button @click.stop="deleteGroup(group)" class="text-red-400 hover:text-red-600 transition-colors p-2">
+                                    <button @click.stop="deleteGroup(group)" class="text-red-400 hover:text-red-600 transition-colors touch-target self-end sm:self-center">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
@@ -334,14 +367,14 @@
                         </div>
 
                         <!-- Create New Group Card -->
-                        <div class="bg-gray-50 dark:bg-gray-700 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors"
+                        <div class="bg-gray-50 dark:bg-gray-700 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors touch-target"
                              @click="openGroupBuilderModal">
-                            <div class="text-center p-6">
+                            <div class="text-center p-4 md:p-6">
                                 <div class="text-gray-400 dark:text-gray-500 mb-2">
-                                    <i class="fas fa-plus text-3xl"></i>
+                                    <i class="fas fa-plus text-2xl md:text-3xl"></i>
                                 </div>
-                                <p class="text-gray-600 dark:text-gray-300 font-medium">Create New Group</p>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Organize leads for targeted follow-up</p>
+                                <p class="text-gray-600 dark:text-gray-300 font-medium text-sm md:text-base">Create New Group</p>
+                                <p class="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-1">Organize leads for targeted follow-up</p>
                             </div>
                         </div>
                     </div>
@@ -351,44 +384,47 @@
                 <div v-if="selectedGroup" class="space-y-6">
                     <!-- Group Header -->
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-600 px-6 py-6">
-                            <div class="flex items-center justify-between mb-4">
+                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-600 px-4 md:px-6 py-6">
+                            <div class="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
                                 <div class="flex-1">
                                     <div class="flex items-center mb-3">
-                                        <button @click="selectedGroup = null" class="mr-4 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                                        <button @click="selectedGroup = null" class="mr-3 md:mr-4 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 touch-target">
                                             <i class="fas fa-arrow-left"></i>
                                             </button>
-                                        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ selectedGroup.name }}</h1>
-                                        <span class="ml-3 text-sm text-gray-500 dark:text-gray-400">
+                                        <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-gray-100 truncate">{{ selectedGroup.name }}</h1>
+                                        <span class="ml-2 md:ml-3 text-xs md:text-sm text-gray-500 dark:text-gray-400 hidden sm:inline">
                                             Created {{ formatDate(selectedGroup.created_at) }}
                                         </span>
                                     </div>
-                                    <p v-if="selectedGroup.description" class="text-gray-600 dark:text-gray-300 text-base">
+                                    <span class="text-xs text-gray-500 dark:text-gray-400 block sm:hidden mb-2">
+                                        Created {{ formatDate(selectedGroup.created_at) }}
+                                    </span>
+                                    <p v-if="selectedGroup.description" class="text-gray-600 dark:text-gray-300 text-sm md:text-base">
                                       {{ selectedGroup.description.split('Exported to Mailchimp:')[0].split('Synced with Mailchimp')[0].trim() }}
                                     </p>
                                 </div>
-                                <div class="text-right">
-                                    <div class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">{{ groupLeads.length }}</div>
+                                <div class="text-center md:text-right">
+                                    <div class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-1">{{ groupLeads.length }}</div>
                                     <div class="text-gray-600 dark:text-gray-400 text-sm">Total Leads</div>
-                                    
-                                    <!-- Mailchimp Buttons -->
-                                    <div class="mt-3 space-y-2">
-                                        <!-- Export Button -->
-                                        <button @click="openMailchimpModal" 
-                                                class="w-full bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center">
-                                            <i class="fab fa-mailchimp mr-2"></i>
-                                            Export to Mailchimp
-                                        </button>
-                                        
-                                        <!-- Sync Button -->
-                                        <button @click="openMailchimpSyncModal" 
-                                                class="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center">
-                                            <i class="fas fa-sync mr-2"></i>
-                                            Sync with Mailchimp
-                                            </button>
-                                        </div>
-                                    </div>
                                 </div>
+                            </div>
+                            
+                            <!-- Mailchimp Action Buttons - Full Width on Mobile -->
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <!-- Export Button -->
+                                <button @click="openMailchimpModal" 
+                                        class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-3 rounded-md text-sm font-medium transition-colors flex items-center justify-center touch-target">
+                                    <i class="fab fa-mailchimp mr-2"></i>
+                                    Export to Mailchimp
+                                </button>
+                                
+                                <!-- Sync Button -->
+                                <button @click="openMailchimpSyncModal" 
+                                        class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-md text-sm font-medium transition-colors flex items-center justify-center touch-target">
+                                    <i class="fas fa-sync mr-2"></i>
+                                    Sync with Mailchimp
+                                </button>
+                            </div>
                             
                             <!-- Integrated Statistics -->
                             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200 dark:border-gray-500">
@@ -414,20 +450,20 @@
 
                     <!-- Group Leads Table -->
                     <div v-if="groupLeads.length > 0" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                            <div class="flex items-center justify-between">
+                        <div class="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Group Leads</h3>
-                                <div class="flex items-center space-x-2">
+                                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:space-x-2 sm:gap-0">
                                     <input v-model="filters.search" 
-                                               placeholder="Search leads..." 
-                                           class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-gray-100">
-                                    <button @click="openGroupBuilderModal" class="bg-indigo-500 text-white px-3 py-1 rounded-md hover:bg-indigo-600 text-sm">
+                                           placeholder="Search leads..." 
+                                           class="px-3 py-2 sm:py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-gray-100 w-full sm:w-auto">
+                                    <button @click="openGroupBuilderModal" class="bg-indigo-500 text-white px-4 py-3 sm:px-3 sm:py-1 rounded-md hover:bg-indigo-600 text-sm font-medium touch-target flex items-center justify-center">
                                         <i class="fas fa-plus mr-1"></i>
                                         Add Leads
                                     </button>
-                                    </div>
                                 </div>
                             </div>
+                        </div>
 
                         <div class="bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden transition-colors duration-200">
                             <div class="overflow-x-auto custom-scrollbar">
@@ -641,9 +677,10 @@
                     </div>
                         
                         <!-- Pagination Controls -->
-                        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                            <div class="flex items-center space-x-4">
-                                <div class="flex items-center space-x-2">
+                        <div class="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                            <!-- Page Size and Info -->
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-center gap-2 sm:gap-4 mb-4">
+                                <div class="flex items-center justify-center space-x-2">
                                     <span class="text-sm text-gray-700 dark:text-gray-300">Show:</span>
                                     <select v-model="pagination.pageSize" @change="pagination.currentPage = 1" 
                                             class="border border-gray-300 dark:border-gray-600 rounded-md text-sm px-2 py-1 dark:bg-gray-700 dark:text-gray-100">
@@ -651,23 +688,24 @@
                                     </select>
                                     <span class="text-sm text-gray-700 dark:text-gray-300">per page</span>
                 </div>
-                                <div class="text-sm text-gray-700 dark:text-gray-300">
+                                <div class="text-sm text-gray-700 dark:text-gray-300 text-center">
                                     Showing {{ paginationInfo.start }} to {{ paginationInfo.end }} of {{ paginationInfo.total }} leads
                 </div>
             </div>
                             
-                            <div class="flex items-center space-x-2" v-if="totalPages > 1">
+                            <!-- Pagination Buttons -->
+                            <div class="flex flex-wrap items-center justify-center gap-1 sm:space-x-2 sm:gap-0" v-if="totalPages > 1">
                                 <button @click="pagination.currentPage = Math.max(1, pagination.currentPage - 1)" 
                                         :disabled="pagination.currentPage === 1"
-                                        class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-100">
+                                        class="px-3 py-2 sm:py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-100 touch-target">
                                     Previous
                                 </button>
                                 
-                                <div class="flex items-center space-x-1">
+                                <div class="flex items-center gap-1 sm:space-x-1 sm:gap-0">
                                     <button v-for="page in getVisiblePages()" :key="page" 
                                             @click="pagination.currentPage = page"
                                             :class="[
-                                                'px-3 py-1 border rounded-md text-sm',
+                                                'px-3 py-2 sm:py-1 border rounded-md text-sm touch-target',
                                                 page === pagination.currentPage 
                                                     ? 'bg-indigo-500 text-white border-indigo-500' 
                                                     : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-100'
@@ -678,7 +716,7 @@
                                 
                                 <button @click="pagination.currentPage = Math.min(totalPages, pagination.currentPage + 1)" 
                                         :disabled="pagination.currentPage === totalPages"
-                                        class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-100">
+                                        class="px-3 py-2 sm:py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-100 touch-target">
                                     Next
                                 </button>
                     </div>
@@ -714,7 +752,7 @@
                         </div>
                         <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">No leads in this group yet</h3>
                         <p class="mb-6 text-gray-500 dark:text-gray-400">Start adding leads to organize your follow-up strategy.</p>
-                        <button @click="openGroupBuilderModal" class="bg-indigo-500 text-white px-6 py-2 rounded-md hover:bg-indigo-600">
+                        <button @click="openGroupBuilderModal" class="bg-indigo-500 text-white px-6 py-3 sm:py-2 rounded-md hover:bg-indigo-600 touch-target">
                             <i class="fas fa-plus mr-2"></i>
                             Add Leads to Group
                         </button>
@@ -722,14 +760,14 @@
                 </div>
 
                 <!-- Group Builder Modal -->
-                <div v-if="showGroupBuilderModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                <div v-if="showGroupBuilderModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-2 sm:p-4">
                     <div :class="[
-                        'bg-white dark:bg-gray-800 rounded-lg shadow-lg relative',
-                        groupBuilderStep === 1 ? 'w-full max-w-md h-auto' : 'w-full max-w-6xl max-h-[90vh] flex flex-col'
-                    ]">
+                        'mobile-modal bg-white dark:bg-gray-800 rounded-lg shadow-lg relative w-full transition-colors duration-200',
+                        groupBuilderStep === 1 ? 'max-w-md' : 'max-w-6xl'
+                    ]" style="max-height: calc(100vh - 2rem);">
                         <!-- Progress Steps -->
-                        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 relative">
-                            <button @click="closeGroupBuilderModal" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-lg z-20 p-1">
+                        <div class="mobile-modal-header px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 relative">
+                            <button @click="closeGroupBuilderModal" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-lg z-20 touch-target">
                                 <i class="fas fa-times"></i>
                             </button>
                             
@@ -759,30 +797,30 @@
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div class="flex justify-between mt-2 mr-8">
-                                <span class="text-sm text-gray-600 dark:text-gray-300">Group Info</span>
-                                <span class="text-sm text-gray-600 dark:text-gray-300">Filter Leads</span>
-                                <span class="text-sm text-gray-600 dark:text-gray-300">Select Leads</span>
+
+                            <div class="flex justify-between mt-2 mr-8 text-xs sm:text-sm">
+                                <span class="text-gray-600 dark:text-gray-300">Group Info</span>
+                                <span class="text-gray-600 dark:text-gray-300">Filter Leads</span>
+                                <span class="text-gray-600 dark:text-gray-300">Select Leads</span>
                             </div>
                         </div>
 
                         <!-- Step Content -->
-                        <div class="flex-1 overflow-hidden">
+                        <div class="overflow-y-auto" style="max-height: calc(100vh - 12rem);">
                             <!-- Step 1: Group Information -->
-                            <div v-if="groupBuilderStep === 1" class="p-6">
+                            <div v-if="groupBuilderStep === 1" class="p-4 sm:p-6">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Group Information</h3>
                                 
                                 <div class="space-y-4">
-                    <div>
+                                    <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Group Name *</label>
                                         <input v-model="newGroup.group_name"
                                                type="text"
                                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-100"
                                                placeholder="Enter group name">
-                    </div>
+                                    </div>
                                     
-                    <div>
+                                    <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                                         <textarea v-model="newGroup.description"
                                                   rows="3"
@@ -793,7 +831,7 @@
                             </div>
 
                             <!-- Step 2: Filter Leads -->
-                            <div v-if="groupBuilderStep === 2" class="p-6 overflow-y-auto">
+                            <div v-if="groupBuilderStep === 2" class="p-4 sm:p-6">
                                 <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Filter Available Leads</h3>
                                 
                                 <!-- Business Rules Information -->
@@ -813,14 +851,14 @@
                                 </div>
                                 
                                 <!-- Filters -->
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Branches</label>
                                         <select v-model="leadFilters.branch_ids" multiple
                                                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-100">
-                            <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
-                        </select>
-                    </div>
+                                            <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
+                                        </select>
+                                    </div>
                                     
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Salespeople</label>
@@ -828,7 +866,7 @@
                                                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-100">
                                             <option v-for="person in salespeople" :key="person.id" :value="person.id">{{ person.name }}</option>
                                         </select>
-                    </div>
+                                    </div>
                                     
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
@@ -836,13 +874,13 @@
                                                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-100">
                                             <option v-for="status in leadStatuses" :key="status.id" :value="status.id">{{ status.name }}</option>
                                         </select>
-            </div>
+                                    </div>
                                     
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date From</label>
                                         <input v-model="leadFilters.date_from" type="date"
                                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-100">
-        </div>
+                                    </div>
 
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date To</label>
@@ -850,30 +888,26 @@
                                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-100">
                                     </div>
                                     
-                                    <div class="flex items-end">
+                                    <div class="flex items-end lg:col-span-1 sm:col-span-2">
                                         <button @click="searchAvailableLeads" :disabled="isLoadingLeads"
-                                                class="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 disabled:opacity-50">
+                                                class="w-full bg-blue-500 text-white px-4 py-3 sm:py-2 rounded-md hover:bg-blue-600 disabled:opacity-50 touch-target">
                                             <i v-if="isLoadingLeads" class="fas fa-spinner fa-spin mr-2"></i>
                                             {{ isLoadingLeads ? 'Searching...' : 'Search Leads' }}
-                    </button>
-                </div>
-            </div>
+                                        </button>
+                                    </div>
+                                </div>
 
                                 <!-- Results Summary -->
                                 <div v-if="availableLeads.length > 0" class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                                     <div class="flex items-center">
                                         <div class="flex-shrink-0">
                                             <i class="fas fa-check-circle text-green-400 text-xl"></i>
-        </div>
+                                        </div>
                                         <div class="ml-3">
                                             <h4 class="text-lg font-medium text-green-800 dark:text-green-200">
                                                 Found {{ availableLeads.length }} matching leads
                                             </h4>
-                                           
-
-
-                                    
-                </div>
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -891,98 +925,95 @@
                             </div>
 
                             <!-- Step 3: Select Leads -->
-                            <div v-if="groupBuilderStep === 3" class="flex flex-col" style="height: calc(90vh - 160px);">
-                                <div class="p-6 pb-2 flex-shrink-0">
-                                    <div class="flex items-center justify-between mb-4">
-                                        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Leads for Group</h3>
-                                        <div class="space-x-2">
-                                            <button @click="selectAllLeads" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
-                                                Select All ({{ availableLeads.length }})
-                                            </button>
-                                            <button @click="clearSelectedLeads" class="text-sm text-gray-600 dark:text-gray-400 hover:underline">Clear</button>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
-                                        <p class="text-sm text-blue-800 dark:text-blue-200">
-                                            <strong>{{ selectedLeadIds.length }}</strong> of <strong>{{ availableLeads.length }}</strong> leads selected
-                                           
-                                        </p>
+                            <div v-if="groupBuilderStep === 3" class="p-4 sm:p-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Select Leads for Group</h3>
+                                    <div class="space-x-2">
+                                        <button @click="selectAllLeads" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                                            Select All ({{ availableLeads.length }})
+                                        </button>
+                                        <button @click="clearSelectedLeads" class="text-sm text-gray-600 dark:text-gray-400 hover:underline">Clear</button>
                                     </div>
                                 </div>
                                 
-                                <div class="flex-1 min-h-0 px-6 pb-6">
-                                    <div class="h-full border border-gray-300 dark:border-gray-600 rounded-lg overflow-y-auto">
-                                        <table class="w-full text-sm">
-                                            <thead class="bg-gray-50 dark:bg-gray-700 sticky top-0">
-                                                <tr>
-                                                    <th class="px-4 py-3 text-left">
-                                                        <input type="checkbox" @change="toggleSelectAll" :checked="selectedLeadIds.length === availableLeads.length && availableLeads.length > 0">
-                                                    </th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Lead</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Customer</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Value</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Salesperson</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Branch</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-600">
-                                                <tr v-for="lead in availableLeads" :key="lead.id" 
-                                                    class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                                    :class="{'bg-blue-50 dark:bg-blue-900/20': selectedLeadIds.includes(lead.id)}">
-                                                    <td class="px-4 py-3">
-                                                        <input type="checkbox" :value="lead.id" v-model="selectedLeadIds" 
-                                                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                                    </td>
-                                                    <td class="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">{{ lead.name }}</td>
-                                                    <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ lead.customer_name }}</td>
-                                                    <td class="px-4 py-3 text-gray-900 dark:text-gray-100">${{ formatCurrency(lead.final_proposal_amount) }}</td>
-                                                    <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ lead.salesperson }}</td>
-                                                    <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ lead.branch }}</td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
+                                    <p class="text-sm text-blue-800 dark:text-blue-200">
+                                        <strong>{{ selectedLeadIds.length }}</strong> of <strong>{{ availableLeads.length }}</strong> leads selected
+                                    </p>
+                                </div>
+
+                                <div class="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                                    <table class="w-full text-sm">
+                                        <thead class="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                                            <tr>
+                                                <th class="px-4 py-3 text-left">
+                                                    <input type="checkbox" @change="toggleSelectAll" :checked="selectedLeadIds.length === availableLeads.length && availableLeads.length > 0">
+                                                </th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Lead</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Customer</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Value</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Salesperson</th>
+                                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Branch</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-600">
+                                            <tr v-for="lead in availableLeads" :key="lead.id" 
+                                                class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                                :class="{'bg-blue-50 dark:bg-blue-900/20': selectedLeadIds.includes(lead.id)}">
+                                                <td class="px-4 py-3">
+                                                    <input type="checkbox" :value="lead.id" v-model="selectedLeadIds" 
+                                                           class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                                </td>
+                                                <td class="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">{{ lead.name }}</td>
+                                                <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ lead.customer_name }}</td>
+                                                <td class="px-4 py-3 text-gray-900 dark:text-gray-100">${{ formatCurrency(lead.final_proposal_amount) }}</td>
+                                                <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ lead.salesperson }}</td>
+                                                <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ lead.branch }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Modal Footer -->
-                        <div class="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-                            <button v-if="groupBuilderStep > 1"
-                                    @click="groupBuilderStep--"
-                                    class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
-                                <i class="fas fa-arrow-left mr-2"></i>
-                                Back
-                            </button>
-                            <div v-else></div>
+                        <!-- Modal Footer -->
+                        <div class="px-4 sm:px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
+                            <div class="flex items-center space-x-2">
+                                <button v-if="groupBuilderStep > 1" 
+                                        @click="groupBuilderStep--" 
+                                        class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
+                                    <i class="fas fa-arrow-left mr-2"></i>
+                                    Back
+                                </button>
+                            </div>
                             
                             <div class="flex space-x-2">
                                 <button @click="closeGroupBuilderModal"
                                         class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
-                        Cancel
-                    </button>
-                                <button v-if="groupBuilderStep < 3"
+                                    Cancel
+                                </button>
+                                <button v-if="groupBuilderStep < 3" 
                                         @click="nextStep"
                                         :disabled="!canProceedToNextStep"
-                                        class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 disabled:opacity-50">
+                                        class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed">
                                     Next
                                     <i class="fas fa-arrow-right ml-2"></i>
                                 </button>
                                 <button v-else
                                         @click="createGroup"
                                         :disabled="isCreatingGroup || selectedLeadIds.length === 0"
-                                        class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50">
+                                        class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed">
                                     <i v-if="isCreatingGroup" class="fas fa-spinner fa-spin mr-2"></i>
                                     {{ isCreatingGroup ? 'Creating...' : 'Create Group' }}
-                    </button>
+                                </button>
                             </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
                 <!-- Mailchimp Export Modal -->
-        <div v-if="showMailchimpModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+                <div v-if="showMailchimpModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
                         <!-- Modal Header with Progress -->
                         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
@@ -1723,14 +1754,16 @@
         const { createApp } = Vue;
 
         createApp({
-            data() {
-                return {
-                    groups: [],
-                    selectedGroup: null,
-                    groupLeads: [],
+                data() {
+        return {
+            isScrolled: false,
+            groups: [],
+            selectedGroup: null,
+            groupLeads: [],
                     showGroupBuilderModal: false,
-                    isSidebarCollapsed: false,
-                    darkMode: false,
+                    isSidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
+                    isMobileSidebarOpen: false,
+                    darkMode: localStorage.getItem('darkMode') === 'true',
                     notifications: [],
                     notificationId: 0,
                     isInitialized: false,
@@ -1886,7 +1919,10 @@
                     sorting: {
                         column: null,        // Current sort column
                         direction: 'asc'     // 'asc' or 'desc'
-                    }
+                    },
+                    
+                    // Scroll detection for burger icon transparency
+                    isScrolled: false
                 }
             },
             computed: {
@@ -1995,7 +2031,29 @@
             methods: {
                 // Navigation
                 toggleSidebar() {
-                    this.isSidebarCollapsed = !this.isSidebarCollapsed;
+                    // On mobile, toggle mobile sidebar
+                    if (window.innerWidth < 768) {
+                        this.isMobileSidebarOpen = !this.isMobileSidebarOpen;
+                        if (this.isMobileSidebarOpen) {
+                            document.body.style.overflow = 'hidden';
+                        } else {
+                            document.body.style.overflow = '';
+                        }
+                    } else {
+                        // On desktop, toggle collapsed state
+                        this.isSidebarCollapsed = !this.isSidebarCollapsed;
+                        localStorage.setItem('sidebarCollapsed', this.isSidebarCollapsed);
+                    }
+                },
+                
+                openMobileSidebar() {
+                    this.isMobileSidebarOpen = true;
+                    document.body.style.overflow = 'hidden';
+                },
+                
+                closeMobileSidebar() {
+                    this.isMobileSidebarOpen = false;
+                    document.body.style.overflow = '';
                 },
                 
                 toggleDarkMode() {
@@ -3458,6 +3516,30 @@
                     alert('Application error: axios library failed to load. Please refresh the page.');
                     return;
                 }
+                
+                // Initialize dark mode
+                if (this.darkMode) {
+                    document.documentElement.classList.add('dark');
+                }
+                
+                // Handle window resize for mobile sidebar
+                window.addEventListener('resize', () => {
+                    if (window.innerWidth >= 768) {
+                        this.closeMobileSidebar();
+                    }
+                });
+                
+                // Handle escape key to close mobile sidebar
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && this.isMobileSidebarOpen) {
+                        this.closeMobileSidebar();
+                    }
+                });
+                
+                // Handle scroll for burger icon transparency
+                window.addEventListener('scroll', () => {
+                    this.isScrolled = window.scrollY > 50;
+                });
                 
                 // Initialize everything in sequence
                 await this.initializeApp();

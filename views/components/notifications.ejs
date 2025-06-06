@@ -3,6 +3,7 @@
   
   Description: This component displays toast notifications for success, error, 
   warning, and info messages. It includes animations and auto-dismiss functionality.
+  Mobile-optimized with responsive positioning and touch-friendly interactions.
   
   Parameters:
   - position: Position of notifications (default: "top-right")
@@ -18,42 +19,43 @@
 %>
 
 <!-- Notifications Container -->
-<div class="fixed <%= typeof position !== 'undefined' ? getPositionClasses(position) : 'top-4 right-4' %> z-50">
+<div class="notifications-container fixed z-50 <%= typeof position !== 'undefined' ? getPositionClasses(position) : 'top-4 right-4 sm:top-4 sm:right-4' %>">
     <transition-group name="notification" tag="div">
         <div v-for="notification in notifications" 
              :key="notification.id"
              :class="[
-                 'mb-2 p-4 rounded-lg shadow-lg max-w-md min-w-80',
+                 'notification-item mb-2 p-4 rounded-lg shadow-lg transition-all duration-300 ease-in-out',
+                 'max-w-sm sm:max-w-md min-w-0 sm:min-w-80',
                  getNotificationClasses(notification.type),
-                 'transform transition-all duration-300 ease-in-out'
+                 'transform'
              ]">
             <div class="flex items-start justify-between">
-                <div class="flex items-start">
+                <div class="flex items-start min-w-0 flex-1">
                     <!-- Notification Icon -->
                     <div class="flex-shrink-0 mr-3">
                         <i :class="getNotificationIcon(notification.type)" class="text-lg"></i>
                     </div>
                     
                     <!-- Notification Content -->
-                    <div class="flex-1">
-                        <h4 v-if="notification.title" class="font-semibold text-sm mb-1">
+                    <div class="flex-1 min-w-0">
+                        <h4 v-if="notification.title" class="font-semibold text-sm mb-1 truncate">
                             {{ notification.title }}
                         </h4>
-                        <p class="text-sm" :class="notification.title ? 'opacity-90' : ''">
+                        <p class="text-sm break-words" :class="notification.title ? 'opacity-90' : ''">
                             {{ notification.message }}
                         </p>
                         
                         <!-- Additional Details -->
-                        <div v-if="notification.details" class="mt-2 text-xs opacity-75">
+                        <div v-if="notification.details" class="mt-2 text-xs opacity-75 break-words">
                             {{ notification.details }}
                         </div>
                         
                         <!-- Action Buttons -->
-                        <div v-if="notification.actions" class="mt-3 flex space-x-2">
+                        <div v-if="notification.actions" class="mt-3 flex flex-wrap gap-2">
                             <button v-for="action in notification.actions"
                                     :key="action.label"
                                     @click="action.handler(notification)"
-                                    class="text-xs px-3 py-1 rounded border border-current hover:bg-white hover:bg-opacity-20 transition-colors">
+                                    class="text-xs px-3 py-2 rounded border border-current hover:bg-white hover:bg-opacity-20 transition-colors touch-target">
                                 {{ action.label }}
                             </button>
                         </div>
@@ -62,7 +64,7 @@
                 
                 <!-- Close Button -->
                 <button @click="removeNotification(notification.id)" 
-                        class="flex-shrink-0 ml-4 text-current hover:opacity-75 transition-opacity">
+                        class="flex-shrink-0 ml-3 text-current hover:opacity-75 transition-opacity touch-target p-1 -m-1">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -90,16 +92,18 @@ const notificationMixin = {
     methods: {
         /**
          * Add a new notification
-         * @param {Object} notification - Notification object
-         * @param {string} notification.type - Type: 'success', 'error', 'warning', 'info'
-         * @param {string} notification.message - Main message
-         * @param {string} [notification.title] - Optional title
-         * @param {string} [notification.details] - Optional additional details
-         * @param {Array} [notification.actions] - Optional action buttons
-         * @param {boolean} [notification.autoDismiss=true] - Auto dismiss after timeout
-         * @param {number} [notification.timeout=5000] - Timeout in milliseconds
+         * @param {Object|string} notification - Notification object or simple message string
+         * @param {string} [type='info'] - Type when notification is a string: 'success', 'error', 'warning', 'info'
          */
-        addNotification(notification) {
+        addNotification(notification, type = 'info') {
+            // Handle simple string messages
+            if (typeof notification === 'string') {
+                notification = {
+                    message: notification,
+                    type: type
+                };
+            }
+            
             const id = ++this.notificationIdCounter;
             const newNotification = {
                 id,
@@ -131,6 +135,13 @@ const notificationMixin = {
             if (index > -1) {
                 this.notifications.splice(index, 1);
             }
+        },
+        
+        /**
+         * Clear all notifications
+         */
+        clearAllNotifications() {
+            this.notifications = [];
         },
         
         /**
@@ -198,40 +209,27 @@ const notificationMixin = {
             return notification.progress || 0;
         },
         
-        // Convenience methods for different notification types
-        showSuccess(message, options = {}) {
-            this.addNotification({ ...options, type: 'success', message });
-        },
-        
-        showError(message, options = {}) {
-            this.addNotification({ ...options, type: 'error', message });
-        },
-        
-        showWarning(message, options = {}) {
-            this.addNotification({ ...options, type: 'warning', message });
-        },
-        
-        showInfo(message, options = {}) {
-            this.addNotification({ ...options, type: 'info', message });
+        /**
+         * Get position classes for notification container
+         * @param {string} position - Position string
+         * @returns {string} CSS classes
+         */
+        getPositionClasses(position) {
+            const positions = {
+                'top-right': 'top-4 right-4',
+                'top-left': 'top-4 left-4',
+                'bottom-right': 'bottom-4 right-4',
+                'bottom-left': 'bottom-4 left-4',
+                'top-center': 'top-4 left-1/2 transform -translate-x-1/2'
+            };
+            return positions[position] || positions['top-right'];
         }
     }
 };
-
-// Position utility function
-function getPositionClasses(position) {
-    const positions = {
-        'top-right': 'top-4 right-4',
-        'top-left': 'top-4 left-4',
-        'bottom-right': 'bottom-4 right-4',
-        'bottom-left': 'bottom-4 left-4',
-        'top-center': 'top-4 left-1/2 transform -translate-x-1/2'
-    };
-    return positions[position] || positions['top-right'];
-}
 </script>
 
 <style>
-/* Notification transition animations */
+/* Notification animations */
 .notification-enter-active,
 .notification-leave-active {
     transition: all 0.3s ease;
@@ -239,15 +237,35 @@ function getPositionClasses(position) {
 
 .notification-enter-from {
     opacity: 0;
-    transform: translateX(100%) scale(0.95);
+    transform: translateX(100%);
 }
 
 .notification-leave-to {
     opacity: 0;
-    transform: translateX(100%) scale(0.95);
+    transform: translateX(100%);
 }
 
-.notification-move {
-    transition: transform 0.3s ease;
+/* Mobile-specific notification styles */
+@media (max-width: 640px) {
+    .notifications-container {
+        left: 1rem !important;
+        right: 1rem !important;
+        top: 1rem !important;
+    }
+    
+    .notification-item {
+        max-width: none !important;
+        min-width: 0 !important;
+    }
+    
+    .notification-enter-from,
+    .notification-leave-to {
+        transform: translateY(-100%);
+    }
+}
+
+/* Ensure notifications are above everything */
+.notifications-container {
+    z-index: 9999;
 }
 </style> 
